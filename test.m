@@ -4,7 +4,12 @@ P0 = read_calib_file('000004.txt');
 
 
 [w, t] = mono_vo(I0, I1, [P0(1,1) P0(2,2)], [P0(1, 3) P0(2, 3)]);
-w
+flow = rotation_motion(w, P0(1,1), [P0(1, 3) P0(2, 3)], [size(I0, 2), size(I0, 1)]);
+
+Fc = flow_to_color(flow);
+imshow(Fc);
+
+flow_field(flow, I0);
 % C = calc_cost(I0, I1, 20);
 % 
 % flow = wta(C);
