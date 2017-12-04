@@ -1,4 +1,4 @@
-function [w, t] = mono_vo(I1, I2, f, center)
+function [w, t, E] = mono_vo(I1, I2, f, center)
 
 debug = 0;
 
@@ -14,12 +14,14 @@ else
     I2gray = I2;
 end
 
+% imagePoints1 = detectSURFFeatures(I1gray, 'MetricThreshold', 500);
+% imagePoints2 = detectSURFFeatures(I2gray, 'MetricThreshold', 500);
 imagePoints1 = detectSURFFeatures(I1gray);
 imagePoints2 = detectSURFFeatures(I2gray);
-
-features1 = extractFeatures(I1gray,imagePoints1, 'SURFSize', 128);
-features2 = extractFeatures(I2gray,imagePoints2, 'SURFSize', 128);
-
+% features1 = extractFeatures(I1gray,imagePoints1, 'SURFSize', 128);
+% features2 = extractFeatures(I2gray,imagePoints2, 'SURFSize', 128);
+features1 = extractFeatures(I1gray,imagePoints1);
+features2 = extractFeatures(I2gray,imagePoints2);
 
 indexPairs = matchFeatures(features1,features2);
 matchedPoints1 = imagePoints1(indexPairs(:,1));
@@ -41,11 +43,27 @@ assert(status == 0);
 if(debug)
 %     show inliers
     figure;
-    imshow(I1);
-    hold on;
-    plot(matchedPoints1.Location(inliers, 1), matchedPoints1.Location(inliers, 2), 'g+');
+    showMatchedFeatures(I1,I2,matchedPoints1(inliers, :),matchedPoints2(inliers, :));
+    title('Inlier Matches')
 end
 
 
 [R, t] = relativeCameraPose(E,intrinsics.CameraParameters,matchedPoints1.Location(inliers, :),matchedPoints2.Location(inliers, :));
 w = rotationMatrixToVector(R);
+
+
+%%%%% Test code to show the relationship between E and F
+% note the intrinsic matrix in Matlab is the transposed version the 
+% conventional version in CV book
+
+if(debug)
+    
+K = intrinsics.IntrinsicMatrix;
+F = K \ E / K';
+F = F / norm(F);
+if F(end) < 0
+    F = -F;
+end
+disp(F);
+draw_epipolar_lines(F, I1, I2, matchedPoints1(inliers, :).Location, matchedPoints2(inliers, :).Location); 
+end
