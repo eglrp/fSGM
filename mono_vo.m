@@ -1,4 +1,4 @@
-function [w, t, E] = mono_vo(I1, I2, f, center)
+function [w, t, E, e1, e2, F] = mono_vo(I1, I2, f, center)
 
 debug = 0;
 
@@ -56,7 +56,7 @@ w = rotationMatrixToVector(R);
 % note the intrinsic matrix in Matlab is the transposed version the 
 % conventional version in CV book
 
-if(debug)
+
     
 K = intrinsics.IntrinsicMatrix;
 F = K \ E / K';
@@ -64,6 +64,15 @@ F = F / norm(F);
 if F(end) < 0
     F = -F;
 end
+[~, ~, V] = svd(F);
+e1 = V(:, end);
+
+[~, ~, V] = svd(F');
+e2 = V(:, end);
+
+if(debug)
 disp(F);
 draw_epipolar_lines(F, I1, I2, matchedPoints1(inliers, :).Location, matchedPoints2(inliers, :).Location); 
 end
+
+

@@ -13,20 +13,20 @@ I1 = imread(sprintf('%06d_11.png', seqIndex));
 % [w, t, E1, e1, e2, F] = mono_vo(I0, I1, [P0(1,1) P0(2,2)], [P0(1, 3) P0(2, 3)]);
 % 
 % flow = rotation_motion(w, P0(1,1), [P0(1, 3) P0(2, 3)], [size(I0, 2), size(I0, 1)]);
-% 
-% % Fc = flow_to_color(flow);
-% % imshow(Fc);
-% 
-% % flow_field(flow, I0);
-% 
+
+% Fc = flow_to_color(flow);
+% imshow(Fc);
+
+% flow_field(flow, I0);
+
+load workspace2.mat
 % 
 % C = calc_cost(I0, I1, e2, flow);
 % 
 % save('workspace.mat', 'C', 'e1', 'e2', 'flow', 'w', 't', 'E1', 'F');
 
-load workspace.mat;
 bestD = sgm(C);
-
+% 
 rows = size(I0, 1);
 cols = size(I0, 2);
 P = zeros(rows, cols, 2);
@@ -45,47 +45,10 @@ gtFlow = flow_read_kitti('C:\Users\megamusz\Desktop\KITTI\training\flow_occ\0000
 
 
 eimage  =  flow_error_image(gtFlow, flowFinal, [3; 0.05]);
+figure;
 imshow(eimage);
-    
-function bestD = sgm(C)
-
-    P1 = 100;
-    P2 = 2000;
-    
-    rows = size(C, 1);
-    cols = size(C, 2);
-    dMax = size(C, 3);
-    
-    L1 = zeros(size(C)); %path cost for left -> right direction
-    
-    for j = 1:rows
-        for i = 1:cols
-            %initialize the Path cost L at the left bounary
-            if i == 1
-                L1(j, 1, :) = C(j, 1, :);
-                
-            else
-                for d = 1:dMax
-                    minLeft  = min(L1(j, i-1, 1:max(1, d-2)), [], 3);
-                    minRight = min(L1(j, i-1, min(dMax, d+2):end), [], 3);
-                    
-                    L1(j, i, d) = C(j, i, d) + min([L1(j, i-1, d), ...
-                                                   L1(j, i-1, min(dMax, d+1)) + P1, ...
-                                                   L1(j, i-1, max(1, d-1)) + P1, ...
-                                                   min(minLeft, minRight) + P2]);
-                end
-                
-                
-            end
-            
-        end
-    end
-    
-    [~, bestD] = min(L1, [], 3);
-    
-end
-
-
+[outlier, aepe] = flow_error(gtFlow, flowFinal, [3;0.05]);
+title(['outlier percentage: ', num2str(outlier), ' AEPE: ', num2str(aepe)]);
 
 function dnorm = normlize(d)
     if(size(d, 3) > 1)
