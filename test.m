@@ -41,7 +41,7 @@ flowT = (bestD-1).*normlizeDirection;
 flowFinal = flowT + flow;
 flowFinal(:,:,3) = 1;
 
-gtFlow = flow_read_kitti('C:\Users\megamusz\Desktop\KITTI\training\flow_occ\000004_10.png');
+gtFlow = flow_read_kitti('000004_10_gtflow.png');
 
 
 eimage  =  flow_error_image(gtFlow, flowFinal, [3; 0.05]);
