@@ -22,13 +22,13 @@ bins = (2*halfWin + 1)*(2*halfWin+1);
 
 cen = false(rows, cols,  bins- 1); % exclude the center comparision 
 
-for j = 1+halfWin:rows-halfWin
-    for i = 1+halfWin:cols-halfWin
+for j = 1:rows
+    for i = 1:cols
         ind = 1;
         for wj=-halfWin:halfWin
             for wi = -halfWin:halfWin
                 if((wj ~= 0 || wi ~= 0)) %exclude the center
-                    if(img(j, i) > img(j+wj, i+wi))
+                    if(img(min(rows, max(1, j)), min(cols, max(1, i))) > img(min(rows, max(1, j+wj)), min(cols, max(1, i+wi))))
                         cen(j, i, ind) = true;
                     end
                     ind = ind + 1;
@@ -38,3 +38,13 @@ for j = 1+halfWin:rows-halfWin
         assert(ind == bins);
     end
 end
+
+% for i = 1:halfWin
+%     cen(i, :, :) = cen(halfWin + 1, :, :);
+%     cen(rows-halfWin+i, :, :) = cen(rows-halfWin, :, :);
+% end
+% 
+% for i = 1:halfWin
+%     cen(:, i, :) = cen(:, halfWin + 1, :);
+%     cen(:, cols-halfWin+i, :) = cen(:, cols-halfWin, :);
+% end
