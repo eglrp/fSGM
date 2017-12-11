@@ -18,7 +18,7 @@ load workspace3.mat
 flow = rotation_motion(w, P0(1,1), [P0(1, 3) P0(2, 3)], [size(I0, 2), size(I0, 1)]);
 
 % 
-dMax = 128;
+dMax = 64;
 vMax = 0.4;
 halfWinSize = 2;
 
@@ -28,6 +28,19 @@ halfWinSize = 2;
 % load workspace.mat;
 
 [bestD, L1, L2, L3, L4] = sgm(C);
+
+figure;
+
+plot(reshape(L1(375, 621, :), 1, []));
+hold on;
+plot(reshape(L2(375, 621, :), 1, []));
+hold on;
+plot(reshape(L3(375, 621, :), 1, []));
+hold on;
+plot(reshape(L4(375, 621, :), 1, []));
+hold on;
+plot(reshape(C(375, 621, :), 1, []));
+
 
 n = dMax+1;
 bestD = vzInd2Disp(bestD-1, O, vMax, n);
@@ -47,6 +60,7 @@ title(['outlier percentage: ', num2str(outlier), ' AEPE: ', num2str(aepe)]);
 figure;
 Fc = flow_to_color(flowFinal);
 imshow(Fc);
+
 
 
 function D = vzInd2Disp(w, O, vMax, n)
