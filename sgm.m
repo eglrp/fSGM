@@ -1,10 +1,8 @@
 function bestD = sgm(C)
 %Peform SGM on Cost Volume C
 
-%     P1 = 10;
-%     P2 = 100;
-    P1 = 15;  
-    P2 = 200;  
+    P1 = 7;  
+    P2 = 100;  
     
     rows = size(C, 1);
     cols = size(C, 2);
@@ -12,16 +10,11 @@ function bestD = sgm(C)
     
     L1 = zeros(size(C)); %path cost for left -> right direction
     L2 = permute(zeros(size(C)), [2,1,3]); %path cost for upper->bottom direction
-    L3 = permute(zeros(size(C)), [2,1,3]); %path cost for bottom -> upper direction
-%     L2 = zeros(size(C)); %path cost for upper->bottom direction
-%     L3 = zeros(size(C)); %path cost for bottom -> upper direction
-    
+    L3 = permute(zeros(size(C)), [2,1,3]); %path cost for bottom -> upper direction 
     L4 = zeros(size(C)); %path cost for right -> left direction
+    
     tic;
     Ct = permute(C, [2,1,3]);
-   
-    
-    
     for i=1:cols
         ir = cols+1-i;
         
@@ -33,7 +26,7 @@ function bestD = sgm(C)
                 minLeft  = min(L1(:, i-1, 1:max(1, d-2)), [], 3);
                 minRight = min(L1(:, i-1, min(dMax, d+2):end), [], 3);
 
-
+                
                 L1(:, i, d) = C(:, i, d) + min([L1(:, i-1, d), ...
                                                 (L1(:, i-1, min(dMax, d+1)) + P1), ...
                                                 (L1(:, i-1, max(1, d-1)) + P1), ...
@@ -65,7 +58,7 @@ function bestD = sgm(C)
                 minLeft  = min(L2(:, i-1, 1:max(1, d-2)), [], 3);
                 minRight = min(L2(:, i-1, min(dMax, d+2):end), [], 3);
 
-
+                
                 L2(:, i, d) = Ct(:, i, d) + min([L2(:, i-1, d), ...
                                                 (L2(:, i-1, min(dMax, d+1)) + P1), ...
                                                 (L2(:, i-1, max(1, d-1)) + P1), ...
@@ -88,8 +81,6 @@ function bestD = sgm(C)
     toc;
     L2 = permute(L2, [2, 1, 3]);
     L3 = permute(L3, [2, 1, 3]);
-%     [~, bestD] = min(L1 + L2 + L3 + L4, [], 3);
     [~, bestD] = min(L1+L4+L2+L3, [], 3);
-%     [~, bestD] = min(L1, [], 3);
-%     [~, bestD] = min(C, [], 3);
+
 end
