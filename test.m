@@ -18,22 +18,19 @@ load workspace3.mat
 flow = rotation_motion(w, P0(1,1), [P0(1, 3) P0(2, 3)], [size(I0, 2), size(I0, 1)]);
 
 % 
-% C = calc_cost(I0, I1, e2, flow, gtFlow);
-% 
-% save('workspace.mat', 'C', 'e1', 'e2', 'flow', 'w', 't', 'E1', 'F');
-load workspace.mat;
+dMax = 128;
+vMax = 0.4;
+halfWinSize = 2;
 
-bestD = sgm(C);
+[C, normlizeDirection, O] = calc_cost(I0, I1, e2, flow, gtFlow, dMax, halfWinSize, vMax);
 % 
-rows = size(I0, 1);
-cols = size(I0, 2);
-P = zeros(rows, cols, 2);
-[P(:,:,1), P(:,:,2)] = meshgrid(1:cols, 1:rows);
-E2I = zeros(rows, cols, 2);
-e2i = [e2(1)/e2(3); e2(2)/e2(3)];
-E2I(:,:,1) = repmat(e2i(1), rows, cols);
-E2I(:,:,2) = repmat(e2i(2), rows, cols);
-normlizeDirection = normlize(P + flow - E2I);
+% save('workspace.mat', 'C', 'e1', 'e2', 'flow', 'w', 't', 'E2', 'F2', 'normlizeDirection', 'O');
+% load workspace.mat;
+
+[bestD, L1, L2, L3, L4] = sgm(C);
+
+n = dMax+1;
+bestD = vzInd2Disp(bestD-1, O, vMax, n);
 flowT = (bestD-1).*normlizeDirection;
 
 flowFinal = flowT + flow;
@@ -50,10 +47,10 @@ title(['outlier percentage: ', num2str(outlier), ' AEPE: ', num2str(aepe)]);
 figure;
 Fc = flow_to_color(flowFinal);
 imshow(Fc);
-function dnorm = normlize(d)
-    if(size(d, 3) > 1)
-        dnorm = d./sqrt(sum(d.^2, 3));
-    else
-        dnorm = d/sqrt(sum(d.^2));
-    end
+
+
+function D = vzInd2Disp(w, O, vMax, n)
+    vzRatio = w./n*vMax;
+    vzInd = vzRatio ./ (1-vzRatio);
+    D = O.*vzInd;
 end

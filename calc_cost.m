@@ -1,4 +1,4 @@
-function C = calc_cost(I1, I2, epipole, Rflow, gtFlow, dMax, halfWinSize)
+function [C, normlizeDirection, O] = calc_cost(I1, I2, epipole, Rflow, gtFlow, dMax, halfWinSize, vMax)
 
 debug = true;
 debug_plot_search_line = true;
@@ -9,10 +9,20 @@ end
 
 if nargin < 6
     dMax = 64;
+else
+    disp(['Assigning dMax: ', num2str(dMax)]);
 end
 
 if nargin < 7
     halfWinSize = 2;
+else
+    disp(['Assigning halfWinSize: ', num2str(halfWinSize)]);
+end
+
+if nargin < 8
+    vMax = 0.3;
+else
+    disp(['Assigning vMax: ', num2str(vMax)]);
 end
 
 assert(isequal(size(I1), size(I2)));
@@ -39,8 +49,9 @@ E2I = zeros(rows, cols, 2);
 
 E2I(:,:,1) = repmat(e2i(1), rows, cols);
 E2I(:,:,2) = repmat(e2i(2), rows, cols);
-
-normlizeDirection = normlize(P + Rflow - E2I);
+Direct = P + Rflow - E2I;
+O = sqrt(sum(Direct.^2, 3)); %Offset from current pixel to epipole in I2
+normlizeDirection = normlize(Direct);
 normDirectionFlat = zeros(2, numPixels);
 normDirectionFlat(1, :) = reshape(normlizeDirection(:,:, 1), 1, []);
 normDirectionFlat(2, :) = reshape(normlizeDirection(:,:, 2), 1, []);
@@ -56,7 +67,11 @@ end
 assert(numel(cen1Flat) == numel(cen1));
 
 tic;
-d = 0:dMax;
+w = 0:dMax;
+
+n = dMax+1;
+vzRatio = w./n*vMax;
+vzInd = vzRatio ./ (1-vzRatio);
 for ind = 1:numPixels
     
     [j, i] = ind2sub([rows, cols], ind);
@@ -70,7 +85,7 @@ for ind = 1:numPixels
     dnorm = normDirectionFlat(:, ind);
     %evaluate disparity from 0 to maximun 
     
-    offset = d.*repmat(dnorm, 1, dMax+1);
+    offset = vzInd.*O(j, i).*repmat(dnorm, 1, dMax+1);
     pt = pw + offset;
     pt = round(pt);
     
@@ -124,16 +139,21 @@ end
 
 toc;
 
-for d = 1:dMax+1
-    C(:,:, d) = reshape(CFlat(d, :), rows, cols);
+for w = 1:dMax+1
+    C(:,:, w) = reshape(CFlat(w, :), rows, cols);
 end
 
 
 if (debug)
     [minCost, Ind] = min(C, [], 3);
 
-    flowT = (Ind-1).*normlizeDirection;
-
+    D = vzInd2Disp(Ind-1, O, vMax, n);
+%     flowT = (Ind-1).*normlizeDirection;
+%     vzRatio = (Ind - 1)./n*vMax;
+%     vzInd = vzRatio ./ (1-vzRatio);
+    
+    flowT = D.*normlizeDirection;
+    
     flow = flowT + Rflow;
     flow(:,:,3) = ones(rows, cols);
     Fc = flow_to_color(flow);
@@ -162,4 +182,10 @@ function dnorm = normlize(d)
     else
         dnorm = d/sqrt(sum(d.^2));
     end
+end
+
+function D = vzInd2Disp(w, O, vMax, n)
+    vzRatio = w./n*vMax;
+    vzInd = vzRatio ./ (1-vzRatio);
+    D = O.*vzInd;
 end

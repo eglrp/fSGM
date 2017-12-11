@@ -1,4 +1,4 @@
-function bestD = sgm(C)
+function [bestD, L1, L2, L3, L4] = sgm(C)
 %Peform SGM on Cost Volume C
 
     P1 = 7;  
