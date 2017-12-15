@@ -75,6 +75,11 @@ vzInd = vzRatio ./ (1-vzRatio);
 for ind = 1:numPixels
     
     [j, i] = ind2sub([rows, cols], ind);
+    if( i== e2i(1) && j == e2i(2))
+        CFlat(:, ind) = zeros(n, 1);
+        continue;
+    end
+    
     uw = reshape(Rflow(j, i, :), 2, 1);
     p = round([i; j]);
     pw = p + uw;
@@ -125,7 +130,9 @@ for ind = 1:numPixels
             line([p(1), pw(1)], [p(2), pw(2)], 'Color', 'y');
             hold on;
 
-            line([pw(1), pw(1) + dMax*dnorm(1)], [pw(2), pw(2) + dMax*dnorm(2)], 'Color', 'r');
+%             line([pw(1), pw(1) + dMax*dnorm(1)], [pw(2), pw(2) + dMax*dnorm(2)], 'Color', 'r');
+            a = vMax/(1-vMax);
+            line([pw(1), pw(1) + a*O(j, i)*dnorm(1)], [pw(2), pw(2) + a*O(j, i)*dnorm(2)], 'Color', 'r');
 
     %             figure;
     %             plot(reshape(C(j, i, :), [], 1));
@@ -138,20 +145,19 @@ end
 
 
 toc;
+saveas(gcf,'search_line.png');
 
 for w = 1:dMax+1
     C(:,:, w) = reshape(CFlat(w, :), rows, cols);
+    
 end
 
+C = imboxfilt3(C, [5 5 1], 'Padding', 'replicate');
 
 if (debug)
     [minCost, Ind] = min(C, [], 3);
 
-    D = vzInd2Disp(Ind-1, O, vMax, n);
-%     flowT = (Ind-1).*normlizeDirection;
-%     vzRatio = (Ind - 1)./n*vMax;
-%     vzInd = vzRatio ./ (1-vzRatio);
-    
+    D = vzInd2Disp(Ind-1, O, vMax, n); 
     flowT = D.*normlizeDirection;
     
     flow = flowT + Rflow;
@@ -170,8 +176,7 @@ if (debug)
     figure;
     imshow([eimageR;eimage]);
     title(['outlier percentage (>3) before vs after:', num2str([er, ef]), ', EPE: ', num2str([aeper, aepef])]);
-    flow_field(flow, I1, gtFlow);
-    flow_field(Rflow, I1, gtFlow);
+    saveas(gcf,'outlier_orignal.png');
 end
 
 end
