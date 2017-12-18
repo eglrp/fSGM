@@ -1,7 +1,7 @@
-function [C, normlizeDirection, O] = calc_cost(I1, I2, epipole, Rflow, gtFlow, dMax, halfWinSize, vMax)
+function [C, normlizeDirection, O] = calc_cost(I1, I2, epipole, Rflow, gtFlow, dMax, halfWinSize, vMax, Pd0, normlizeDirection, O)
 
-debug = true;
-debug_plot_search_line = true;
+debug = false;
+debug_plot_search_line = false;
 
 if debug
     close all;
@@ -9,20 +9,14 @@ end
 
 if nargin < 6
     dMax = 64;
-else
-    disp(['Assigning dMax: ', num2str(dMax)]);
 end
 
 if nargin < 7
     halfWinSize = 2;
-else
-    disp(['Assigning halfWinSize: ', num2str(halfWinSize)]);
 end
 
 if nargin < 8
     vMax = 0.3;
-else
-    disp(['Assigning vMax: ', num2str(vMax)]);
 end
 
 assert(isequal(size(I1), size(I2)));
@@ -43,15 +37,6 @@ e2i = [epipole(1)/epipole(3); epipole(2)/epipole(3)];
 
 C = 65535 * ones(rows, cols, dMax + 1);
 
-P = zeros(rows, cols, 2);
-[P(:,:,1), P(:,:,2)] = meshgrid(1:cols, 1:rows);
-E2I = zeros(rows, cols, 2);
-
-E2I(:,:,1) = repmat(e2i(1), rows, cols);
-E2I(:,:,2) = repmat(e2i(2), rows, cols);
-Direct = P + Rflow - E2I;
-O = sqrt(sum(Direct.^2, 3)); %Offset from current pixel to epipole in I2
-normlizeDirection = normlize(Direct);
 normDirectionFlat = zeros(2, numPixels);
 normDirectionFlat(1, :) = reshape(normlizeDirection(:,:, 1), 1, []);
 normDirectionFlat(2, :) = reshape(normlizeDirection(:,:, 2), 1, []);
@@ -72,6 +57,7 @@ w = 0:dMax;
 n = dMax+1;
 vzRatio = w./n*vMax;
 vzInd = vzRatio ./ (1-vzRatio);
+
 for ind = 1:numPixels
     
     [j, i] = ind2sub([rows, cols], ind);
@@ -79,19 +65,14 @@ for ind = 1:numPixels
         CFlat(:, ind) = zeros(n, 1);
         continue;
     end
-    
-    uw = reshape(Rflow(j, i, :), 2, 1);
-    p = round([i; j]);
-    pw = p + uw;
 
-    %unit vector pointing from epipole in I2 to current pw (current
-    %pixel + rotational offset)
+    pd0 = reshape(Pd0(j, i, :), 2, 1);
 
     dnorm = normDirectionFlat(:, ind);
-    %evaluate disparity from 0 to maximun 
     
+    %get 2D offset of disparity from 0 to maximun   
     offset = vzInd.*O(j, i).*repmat(dnorm, 1, dMax+1);
-    pt = pw + offset;
+    pt = pd0 + offset;
     pt = round(pt);
     
     pt(1,:) = min(cols, max(1, pt(1,:)));
@@ -127,12 +108,12 @@ for ind = 1:numPixels
 
             plot(i,j,'bx');
             hold on;
-            line([p(1), pw(1)], [p(2), pw(2)], 'Color', 'y');
+            line([p(1), pd0(1)], [p(2), pd0(2)], 'Color', 'y');
             hold on;
 
 %             line([pw(1), pw(1) + dMax*dnorm(1)], [pw(2), pw(2) + dMax*dnorm(2)], 'Color', 'r');
             a = vMax/(1-vMax);
-            line([pw(1), pw(1) + a*O(j, i)*dnorm(1)], [pw(2), pw(2) + a*O(j, i)*dnorm(2)], 'Color', 'r');
+            line([pd0(1), pd0(1) + a*O(j, i)*dnorm(1)], [pd0(2), pd0(2) + a*O(j, i)*dnorm(2)], 'Color', 'r');
 
     %             figure;
     %             plot(reshape(C(j, i, :), [], 1));
@@ -145,7 +126,9 @@ end
 
 
 toc;
-saveas(gcf,'search_line.png');
+if(debug_plot_search_line)
+    saveas(gcf,'search_line.png');
+end
 
 for w = 1:dMax+1
     C(:,:, w) = reshape(CFlat(w, :), rows, cols);
@@ -181,13 +164,6 @@ end
 
 end
 
-function dnorm = normlize(d)
-    if(size(d, 3) > 1)
-        dnorm = d./sqrt(sum(d.^2, 3));
-    else
-        dnorm = d/sqrt(sum(d.^2));
-    end
-end
 
 function D = vzInd2Disp(w, O, vMax, n)
     vzRatio = w./n*vMax;

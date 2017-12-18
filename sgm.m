@@ -296,22 +296,26 @@ function [bestD, minC, L1, L2, L3, L4] = sgm(C, P1, P2, e)
     [minC, bestD] = min(L, [], 3);
     
     
-if(subpixelRefine)
-    % do subpixel quadratic interpolation:
-    % fit parabola into (x1=d-1, y1=C[d-1]), (x2=d, y2=C[d]), (x3=d+1, y3=C[d+1])
-    % then find minimum of the parabola.
-    for j = 1:rows
-        for i =1:cols
-            
-            if (bestD(j, i) > 1 && bestD(j, i) < dMax)
-                c_1 = L(j, i, bestD(j, i)-1);
-                c = L(j, i, bestD(j, i));
-                c1 = L(j, i, bestD(j, i)+1);
-                denorm2 = max(c_1+c1-2*c, 1);
-                bestD(j, i) = bestD(j, i) + ((c_1-c1) + denorm2)/(denorm2*2);
+    if(subpixelRefine)
+        % do subpixel quadratic interpolation:
+        % fit parabola into (x1=d-1, y1=C[d-1]), (x2=d, y2=C[d]), (x3=d+1, y3=C[d+1])
+        % then find minimum of the parabola.
+        for j = 1:rows
+            for i =1:cols
+
+                if (bestD(j, i) > 1 && bestD(j, i) < dMax)
+                    c_1 = L(j, i, bestD(j, i)-1);
+                    c = L(j, i, bestD(j, i));
+                    c1 = L(j, i, bestD(j, i)+1);
+                    denorm2 = max(c_1+c1-2*c, 1);
+                    bestD(j, i) = bestD(j, i) + ((c_1-c1) + denorm2)/(denorm2*2);
+                end
             end
         end
     end
-end
+    
+    
+
+    bestD = bestD - 1;
 
 end

@@ -1,4 +1,4 @@
-function [F, E, H, epi, status] = epipolar_geometry(I1, I2, K)
+function [F, E, H, epi, direction, Pd0, normlizeDirection, O,  Rflow, status] = epipolar_geometry(I1, I2, K)
 %Calculate the epipolar geometry for two Camera views I1 and I2
 % output is Fundamental Matrix F and epipoles in I2. 
 %
@@ -20,6 +20,8 @@ end
 if(size(I2, 3) > 1)
     I2 = rgb2gray(I2);
 end
+cols = size(I1, 2);
+rows = size(I1, 1);
 
 %%% feature detection
 points1 = detectSURFFeatures(I1, 'MetricThreshold', 500);
@@ -46,10 +48,16 @@ end
 %%% estimate fundamental matrix F
 [F, inlierIndx, status] = estimateFundamentalMatrix(matchedPoints1,...
     matchedPoints2,'Method','LMedS',...
-    'NumTrials',10000,'DistanceThreshold',1e-4);
-
-disp(['Inlier percentage: ', num2str(sum(inlierIndx)/length(matchedPoints1))]);
+    'NumTrials',10000,'DistanceThreshold',1e-4, 'ReportRuntimeError', false);
+if(debug)
+    disp(['Inlier percentage: ', num2str(sum(inlierIndx)/length(matchedPoints1))]);
+end
 if(status ~= 0)
+    F = -1;
+    E  = -1;
+    epi = [cols/2, rows/2, 1];
+    H = eye(3);
+    direction=0;
     return;
 end
 
@@ -71,10 +79,10 @@ if(debug)
     saveas(gcf, 'epipolar_lines.png');
 end
 
-fp = fopen('000000_10_fund.dat', 'rb');
-
-F = fread(fp, 9, 'double');
-F = reshape(F, [3, 3])';
+% fp = fopen('000000_10_fund.dat', 'rb');
+% 
+% F = fread(fp, 9, 'double');
+% F = reshape(F, [3, 3])';
 
 %%% compute epipole in I2 %%%
 % F'e' = 0, Fe = 0
@@ -105,4 +113,63 @@ end
 H = K*R/K;
 
 
+%%% detect direction (expansion or contraction)
+expansion = 0;
+inlierNum = sum(inlierIndx);
 
+for i = 1:length(inlierIndx)
+    if(inlierIndx(i)) 
+        x1 = matchedPoints1.Location(i,1);
+        y1 = matchedPoints1.Location(i,2);
+        pr = H*[x1, y1, 1]';
+        xr = pr(1)/pr(3);
+        yr = pr(2)/pr(3);
+        
+        dist1 = sqrt((xr-epi(1))^2 + (yr-epi(2))^2);
+        
+        x2 = matchedPoints2.Location(i,1);
+        y2 = matchedPoints2.Location(i,2);
+        
+        dist2 = sqrt((x2-epi(1))^2 + (y2-epi(2))^2);
+        
+        if(dist2 > dist1)
+            expansion = expansion + 1;
+        end
+    end
+end
+
+if(expansion/inlierNum > 0.5)
+    direction = 0;
+else
+    direction = 1;
+end
+
+
+%%% calculate starting search postition in I2
+% and the direction along epipolar line for every pixel in I1
+
+P = zeros(rows, cols, 2);
+[P(:,:,1), P(:,:,2)] = meshgrid(1:cols, 1:rows);
+E2I = zeros(rows, cols, 2);
+E2I(:,:,1) = repmat(epi(1), rows, cols);
+E2I(:,:,2) = repmat(epi(2), rows, cols);
+
+Rflow = rotation_motion(H, F, rows, cols);
+
+Pd0 = P + Rflow; % position with zero disparity
+Direct = Pd0 - E2I;
+if(direction)
+    Direct = -Direct;
+end
+
+O = sqrt(sum(Direct.^2, 3)); %Offset from Pd0 to epipole in I2
+normlizeDirection = normlize(Direct); %normlized direction
+end
+
+function dnorm = normlize(d)
+    if(size(d, 3) > 1)
+        dnorm = d./sqrt(sum(d.^2, 3));
+    else
+        dnorm = d/sqrt(sum(d.^2));
+    end
+end
