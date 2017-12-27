@@ -307,8 +307,16 @@ function [bestD, minC, L1, L2, L3, L4] = sgm(C, P1, P2, e)
                     c_1 = L(j, i, bestD(j, i)-1);
                     c = L(j, i, bestD(j, i));
                     c1 = L(j, i, bestD(j, i)+1);
-                    denorm2 = max(c_1+c1-2*c, 1);
-                    bestD(j, i) = bestD(j, i) + ((c_1-c1) + denorm2)/(denorm2*2);
+                  
+                    
+                    if (c1 < c_1)
+                        bestD(j, i) = bestD(j, i) + (c1-c_1)/(c - c_1)/2.0;
+                    else
+                        bestD(j, i) = bestD(j, i) + (c1-c_1)/(c - c1)/2.0;
+                    end
+                    
+                    
+     
                 end
             end
         end
