@@ -1,21 +1,21 @@
-classdef Stack < handle
+classdef Queue < handle
 %--------------------------------------------------------------------------
-% Class:        Stack < handle
+% Class:        Queue < handle
 %               
-% Constructor:  S = Stack(n);
-%               S = Stack(n,x0);
+% Constructor:  Q = Queue(n);
+%               Q = Queue(n,x0);
 %               
 % Properties:   (none)
 %               
-% Methods:                 S.Push(xi);
-%               xi       = S.Pop();
-%               count    = S.Count();
-%               capacity = S.Capacity();
-%               bool     = S.IsEmpty();
-%               bool     = S.IsFull();
-%                          S.Clear();
+% Methods:                 Q.Enqueue(xi);
+%               xi       = Q.Dequeue();
+%               count    = Q.Count();
+%               capacity = Q.Capacity();
+%               bool     = Q.IsEmpty();
+%               bool     = Q.IsFull();
+%                          Q.Clear();
 %               
-% Description:  This class implements a first-in last-out (FILO) stack of
+% Description:  This class implements a first-in first-out (FIFO) queue of
 %               numeric values
 %               
 % Author:       Brian Moore
@@ -29,8 +29,10 @@ classdef Stack < handle
     %
     properties (Access = private)
         k;                  % current number of elements
-        n;                  % stack capacity
-        x;                  % stack array
+        n;                  % queue capacity
+        x;                  % queue array
+        tail;               % tail pointer
+        head;               % head pointer
     end
     
     %
@@ -40,23 +42,23 @@ classdef Stack < handle
         %
         % Constructor
         %
-        function this = Stack(n,x0)
+        function this = Queue(n,x0)
             %----------------------- Constructor --------------------------
-            % Syntax:       S = Stack(n);
-            %               S = Stack(n,x0);
+            % Syntax:       Q = Queue(n);
+            %               Q = Queue(n,x0);
             %               
-            % Inputs:       n is the maximum number of values that S can
+            % Inputs:       n is the maximum number of numbers that Q can
             %               hold
             %               
             %               x0 is a vector (of length <= n) of numbers to
-            %               add to the stack during initialization
+            %               add to the queue during initialization
             %               
-            % Description:  Creates a FILO stack with capacity n
+            % Description:  Creates a FIFO queue with capacity n
             %--------------------------------------------------------------
             
-            % Initialize stack
+            % Initialize queue
             if (n == 0)
-                Stack.ZeroCapacityError();
+                Queue.ZeroCapacityError();
             end
             this.n = n;
             this.x = nan(n,1);
@@ -65,91 +67,95 @@ classdef Stack < handle
                 % Insert given elements
                 k0 = numel(x0);
                 if (k0 > n)
-                    % Stack overflow
-                    Stack.OverflowError();
+                    % Queue overflow
+                    Queue.OverflowError();
                 else
                     this.x(1:k0) = x0(:);
                     this.SetLength(k0);
+                    this.SetHead(1);
+                    this.SetTail(k0 + 1);
                 end
             else
-                % Empty stack
+                % Empty queue
                 this.Clear();
             end
         end
         
         %
-        % Push element onto stack
+        % Add element to end of queue
         %
-        function Push(this,xi)
-            %--------------------------- Push -----------------------------
-            % Syntax:       S.Push(xi);
+        function Enqueue(this,xi)
+            %------------------------- Enqueue ----------------------------
+            % Syntax:       Q.Enqueue(xi);
             %               
             % Inputs:       xi is a numeric value
             %               
-            % Description:  Adds value xi to S
+            % Description:  Adds value xi to Q
             %--------------------------------------------------------------
             
             this.SetLength(this.k + 1);
-            this.x(this.k) = xi;
+            this.x(this.tail) = xi;
+            this.SetTail(this.tail + 1);
         end
         
         %
-        % Pop element from stack
+        % Remove element from front of queue
         %
-        function xi = Pop(this)
-            %--------------------------- Pop ------------------------------
-            % Syntax:       xi = S.Pop();
+        function xi = Dequeue(this)
+            %------------------------- Dequeue ----------------------------
+            % Syntax:       xi = Q.Dequeue();
             %               
-            % Inputs:       xi is a numeric value
+            % Outputs:      xi is a numeric value
             %               
-            % Description:  Removes top value from S
+            % Description:  Removes first value from Q
             %--------------------------------------------------------------
             
             this.SetLength(this.k - 1);
-            xi = this.x(this.k + 1);
+            xi = this.x(this.head);
+            this.SetHead(this.head + 1);
         end
         
         %
-        % Return number of elements in stack
+        % Return number of elements in queue
         %
         function count = Count(this)
             %-------------------------- Count -----------------------------
-            % Syntax:       count = S.Count();
+            % Syntax:       count = Q.Count();
             %               
-            % Outputs:      count is the number of values in S
+            % Outputs:      count is the number of values in Q
             %               
-            % Description:  Returns the number of values in S
+            % Description:  Returns the number of values in Q
             %--------------------------------------------------------------
             
             count = this.k;
         end
         
         %
-        % Return stack capacity
+        % Return queue capacity
         %
         function capacity = Capacity(this)
             %------------------------- Capacity ---------------------------
-            % Syntax:       capacity = S.Capacity();
+            % Syntax:       capacity = Q.Capacity();
             %               
-            % Outputs:      capacity is the size of S
+            % Outputs:      capacity is the size of Q
             %               
             % Description:  Returns the maximum number of values that can 
-            %               fit in S
+            %               fit in Q
             %--------------------------------------------------------------
             
             capacity = this.n;
         end
         
         %
-        % Check for empty stack
+        % Check for empty queue
         %
         function bool = IsEmpty(this)
             %------------------------- IsEmpty ----------------------------
-            % Syntax:       bool = S.IsEmpty();
+            % Syntax:       bool = Q.IsEmpty();
             %               
             % Outputs:      bool = {true,false}
             %               
-            % Description:  Determines if S is empty (i.e., contains zero
+            % Description:  Determines if Q is empty (i.e., contains zero
             %               values)
             %--------------------------------------------------------------
             
@@ -161,15 +167,15 @@ classdef Stack < handle
         end
         
         %
-        % Check for full stack
+        % Check for full queue
         %
         function bool = IsFull(this)
             %-------------------------- IsFull ----------------------------
-            % Syntax:       bool = S.IsFull();
+            % Syntax:       bool = Q.IsFull();
             %               
             % Outputs:      bool = {true,false}
             %               
-            % Description:  Determines if S is full
+            % Description:  Determines if Q is full
             %--------------------------------------------------------------
             
             if (this.k == this.n)
@@ -180,16 +186,18 @@ classdef Stack < handle
         end
         
         %
-        % Clear the stack
+        % Clear the queue
         %
         function Clear(this)
             %-------------------------- Clear -----------------------------
-            % Syntax:       S.Clear();
+            % Syntax:       Q.Clear();
             %               
-            % Description:  Removes all values from S
+            % Description:  Removes all values from Q
             %--------------------------------------------------------------
             
             this.SetLength(0);
+            this.SetTail(1);
+            this.SetHead(1);
         end
     end
     
@@ -202,11 +210,33 @@ classdef Stack < handle
         %
         function SetLength(this,k)
             if (k < 0)
-                Stack.UnderflowError();
+                Queue.UnderflowError();
             elseif (k > this.n)
-                Stack.OverflowError();
+                Queue.OverflowError();
             end
             this.k = k;
+        end
+        
+        %
+        % Set head pointer
+        %
+        function SetHead(this,head)
+            % Wrap head pointer
+            if (head > this.n)
+                head = 1;
+            end
+            this.head = head;
+        end
+        
+        %
+        % Set tail pointer
+        % 
+        function SetTail(this,tail)
+            % Wrap tail pointer
+            if (tail > this.n)
+                tail = 1;
+            end
+            this.tail = tail;
         end
     end
     
@@ -218,21 +248,21 @@ classdef Stack < handle
         % Overflow error
         %
         function OverflowError()
-            error('Stack overflow');
+            error('Queue overflow');
         end
         
         %
         % Underflow error
         %
         function UnderflowError()
-            error('Stack underflow');
+            error('Queue underflow');
         end
         
         %
         % No capacity error
         %
         function ZeroCapacityError()
-            error('Stack with no capacity is not allowed');
+            error('Queue with no capacity is not allowed');
         end
     end
 end

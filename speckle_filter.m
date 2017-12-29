@@ -1,4 +1,4 @@
-function [ imageFiltered ] = speckle_filter( image, maxDiff, maxSpeckleSize )
+function [ imageFiltered, labelImage ] = speckle_filter( image, maxDiff, maxSpeckleSize )
 %Implemented the speckle filter in OpenCV
 %   [ imageFiltered ] = speckle_filter( image, maxDiff, maxSpeckleSize )
 %   remove small blobs in image, the maxDiff is the threshold to
@@ -30,9 +30,9 @@ for y = 1:height
                 end
             else
 %                  stack=java.util.Stack();
-                 stack = Stack(width*height);
+                 queue = Queue(width*height);
 %                  stack.push(ind);
-                stack.Push(ind);
+                queue.Enqueue(ind);
                  
                  curLabel = curLabel + 1;
                  regionTypes(curLabel) = false;
@@ -40,9 +40,9 @@ for y = 1:height
                  labels(ind) = curLabel;
                  regionPixelNum = 0;
 %                  while(~stack.empty())
-                while(~stack.IsEmpty())
+                while(~queue.IsEmpty())
 %                      curPixelIdx = stack.pop();
-                     curPixelIdx = stack.Pop();
+                     curPixelIdx = queue.Dequeue();
                      
                      [curx, cury] = ind2sub([width, height], curPixelIdx);
                      regionPixelNum = regionPixelNum+1;
@@ -55,7 +55,7 @@ for y = 1:height
                              ~isnan(image(cury, curx+1)) && abs(pixelValue - image(cury, curx+1))< maxDiff)
                              labels(curPixelIdx + 1) = curLabel;
 %                              stack.push(curPixelIdx+1);
-                            stack.Push(curPixelIdx+1);
+                            queue.Enqueue(curPixelIdx+1);
                          end
                      end
                      
@@ -65,7 +65,7 @@ for y = 1:height
                              ~isnan(image(cury, curx-1)) && abs(pixelValue - image(cury, curx-1))< maxDiff)
                              labels(curPixelIdx - 1) = curLabel;
 %                              stack.push(curPixelIdx-1);
-                            stack.Push(curPixelIdx-1);
+                            queue.Enqueue(curPixelIdx-1);
                          end
                      end
                      
@@ -75,7 +75,7 @@ for y = 1:height
                              ~isnan(image(cury+1, curx)) && abs(pixelValue - image(cury+1, curx))< maxDiff)
                              labels(curPixelIdx + width) = curLabel;
 %                              stack.push(curPixelIdx + width);
-                            stack.Push(curPixelIdx + width);
+                            queue.Enqueue(curPixelIdx + width);
                          end
                      end
                      
@@ -85,7 +85,7 @@ for y = 1:height
                              ~isnan(image(cury-1, curx)) && abs(pixelValue - image(cury-1, curx))< maxDiff)
                              labels(curPixelIdx - width) = curLabel;
 %                              stack.push(curPixelIdx - width);
-                            stack.Push(curPixelIdx - width);
+                            queue.Enqueue(curPixelIdx - width);
                          end
                      end
                  end
@@ -98,7 +98,7 @@ for y = 1:height
         end
     end
 end
-
+labelImage = reshape(labels, [width, height])';
 imageFiltered = image;
 toc;
 end
