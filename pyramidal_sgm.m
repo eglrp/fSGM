@@ -1,4 +1,4 @@
-function [ mvCurLevel, mvPyd ] = pyramidal_sgm( I0, I1, numPyd )
+function [ mvCurLevel, mvPyd , minC] = pyramidal_sgm( I0, I1, numPyd )
 %PYRAMIDAL_SGM Summary of this function goes here
 %   Detailed explanation goes here
 
@@ -6,7 +6,7 @@ function [ mvCurLevel, mvPyd ] = pyramidal_sgm( I0, I1, numPyd )
     I1pyd{1} = I1;
     mvPyd = {numPyd};
 
-    verSearchHalfWinSize = 5;
+    
     
     %create image pyramid
     for l = 2:numPyd
@@ -19,20 +19,23 @@ function [ mvCurLevel, mvPyd ] = pyramidal_sgm( I0, I1, numPyd )
     P2 = 64;
     % loop pyramidal levels
     for l = numPyd:-1:1
+        verSearchHalfWinSize = 7 + l - numPyd;
         rowl = size(I0pyd{l}, 1);
         coll = size(I0pyd{l}, 2);
         mvCurLevel = zeros(rowl, coll, 2);
         
         %construct cost volume
         aggSize = 5;
+
         C = calc_cost_coloc(I0pyd{l}, I1pyd{l}, mvPreLevel, verSearchHalfWinSize, aggSize);
         
         %2d sgm
   
-        [minIdx, minC, mvSub] = sgm2d(C, 2*verSearchHalfWinSize+1, 4*verSearchHalfWinSize + 1, P1, P2);
+        [minIdx, minC, mvSub] = sgm2d(C, 2*verSearchHalfWinSize+1, 4*verSearchHalfWinSize + 1, P1, P2, 1);
         
         %WTA
 %         [~, minIdx] = min(C, [], 3);
+
         
         % recover mv from idx
         [r, c] = ind2sub([2*verSearchHalfWinSize+1, 4*verSearchHalfWinSize + 1], minIdx(:));
