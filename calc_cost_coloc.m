@@ -14,10 +14,11 @@ rows = size(I1, 1);
 cols = size(I1, 2);
 numPixels = rows*cols;
 dMax = (4*halfSearchWinSize+1)*(2*halfSearchWinSize+1);
-C = 65535 * ones(rows, cols, 2*halfSearchWinSize+1);
-cen1Flat = zeros(size(cen1, 3), numPixels);
-cen2Flat = zeros(size(cen2, 3), numPixels);
-CFlat = 65535*ones(dMax, numPixels);
+maxHDCost = (2*cenWinSize+1).^2 - 1;
+C = uint8(maxHDCost*ones(rows, cols, 2*halfSearchWinSize+1));
+cen1Flat = false(size(cen1, 3), numPixels);
+cen2Flat = false(size(cen2, 3), numPixels);
+CFlat = uint8(maxHDCost*ones(dMax, numPixels));
 
 for i = 1:size(cen1, 3)
     cen1Flat(i, :) = reshape(cen1(:,:,i), 1, []);
@@ -29,6 +30,9 @@ tic;
 
 [offx, offy] = meshgrid(-2*halfSearchWinSize:2*halfSearchWinSize, -halfSearchWinSize:halfSearchWinSize);
 
+offx = reshape(offx, [], 1);
+offy = reshape(offy, [], 1);
+
 for ind = 1:numPixels
     
     [j, i] = ind2sub([rows, cols], ind);
@@ -39,8 +43,7 @@ for ind = 1:numPixels
     targetX = min(cols, max(1, round(offx + i + mvxPre)));
     targetY = min(rows, max(1, round(offy + j + mvyPre)));
     
-    
-    ind2 = sub2ind([rows, cols], reshape(targetY, [], 1), reshape(targetX, [], 1));
+    ind2 = sub2ind([rows, cols], targetY, targetX);
 
     cenCur = cen1Flat(:, ind);
     cenRef = cen2Flat(:, ind2);

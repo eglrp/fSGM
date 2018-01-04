@@ -22,15 +22,15 @@ function [bestD, minC, L1, L2, L3, L4] = sgm(C, P1, P2, e)
     cols = size(C, 2);
     dMax = size(C, 3);
     
-    L1 = 65535*ones(size(C)); %path cost for left -> right direction
-    L2 = permute(65535*ones(size(C)), [2,1,3]); %path cost for upper->bottom direction
-    L3 = permute(65535*ones(size(C)), [2,1,3]); %path cost for bottom -> upper direction 
-    L4 = 65535*ones(size(C)); %path cost for right -> left direction
+    L1 = uint8(ones(size(C))); %path cost for left -> right direction
+    L2 = uint8(permute(ones(size(C)), [2,1,3])); %path cost for upper->bottom direction
+    L3 = uint8(permute(ones(size(C)), [2,1,3])); %path cost for bottom -> upper direction 
+    L4 = uint8(ones(size(C))); %path cost for right -> left direction
     if(enableDiagonalPath)
-        L5 = 65535*ones(size(C)); %path cost for 45 degree top-left to bottom-right
-        L6 = 65535*ones(size(C)); %path cost for 45 degree top-right to bottom-left
-        L7 = permute(65535*ones(size(C)), [2, 1, 3]); %path cost for 45 degree bottom-left to top-right
-        L8 = permute(65535*ones(size(C)), [2, 1, 3]); %path cost for 45 degree bottom-right to top-left
+        L5 = uint8(ones(size(C))); %path cost for 45 degree top-left to bottom-right
+        L6 = uint8(ones(size(C))); %path cost for 45 degree top-right to bottom-left
+        L7 = uint8(permute(ones(size(C)), [2, 1, 3])); %path cost for 45 degree bottom-left to top-right
+        L8 = uint8(permute(ones(size(C)), [2, 1, 3])); %path cost for 45 degree bottom-right to top-left
     end
     tic;
     Ct = permute(C, [2,1,3]);
@@ -304,9 +304,9 @@ function [bestD, minC, L1, L2, L3, L4] = sgm(C, P1, P2, e)
             for i =1:cols
 
                 if (bestD(j, i) > 1 && bestD(j, i) < dMax)
-                    c_1 = L(j, i, bestD(j, i)-1);
-                    c = L(j, i, bestD(j, i));
-                    c1 = L(j, i, bestD(j, i)+1);
+                    c_1 = double(L(j, i, bestD(j, i)-1));
+                    c = double(L(j, i, bestD(j, i)));
+                    c1 = double(L(j, i, bestD(j, i)+1));
                   
                     
                     if (c1 < c_1)

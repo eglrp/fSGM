@@ -35,15 +35,15 @@ numPixels = rows*cols;
 assert(epipole(3) ~= 0, 'epipole is at inifinity, not supported');
 e2i = [epipole(1)/epipole(3); epipole(2)/epipole(3)];
 
-C = 65535 * ones(rows, cols, dMax + 1);
+C = uint8(ones(rows, cols, dMax + 1));
 
 normDirectionFlat = zeros(2, numPixels);
 normDirectionFlat(1, :) = reshape(normlizeDirection(:,:, 1), 1, []);
 normDirectionFlat(2, :) = reshape(normlizeDirection(:,:, 2), 1, []);
 
-cen1Flat = zeros(size(cen1, 3), numPixels);
-cen2Flat = zeros(size(cen2, 3), numPixels);
-CFlat = 65535*ones(dMax+1, numPixels);
+cen1Flat = false(size(cen1, 3), numPixels);
+cen2Flat = false(size(cen2, 3), numPixels);
+CFlat = uint8(ones(dMax+1, numPixels));
 
 for i = 1:size(cen1, 3)
     cen1Flat(i, :) = reshape(cen1(:,:,i), 1, []);

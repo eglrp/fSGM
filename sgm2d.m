@@ -18,10 +18,10 @@ function [bestD, minC, mvSub, L1, L2, L3, L4] = sgm2d(C, m, n, P1, P2, subpixelR
     cols = size(C, 2);
     dMax = size(C, 3);
     
-    L1 = 65535*ones(size(C)); %path cost for left -> right direction
-    L2 = permute(65535*ones(size(C)), [2,1,3]); %path cost for upper->bottom direction
-    L3 = permute(65535*ones(size(C)), [2,1,3]); %path cost for bottom -> upper direction 
-    L4 = 65535*ones(size(C)); %path cost for right -> left direction
+    L1 = uint8(ones(size(C))); %path cost for left -> right direction
+    L2 = uint8(permute(ones(size(C)), [2,1,3])); %path cost for upper->bottom direction
+    L3 = uint8(permute(ones(size(C)), [2,1,3])); %path cost for bottom -> upper direction 
+    L4 = uint8(ones(size(C))); %path cost for right -> left direction
 
     tic;
     Ct = permute(C, [2,1,3]);
@@ -110,11 +110,11 @@ function [bestD, minC, mvSub, L1, L2, L3, L4] = sgm2d(C, m, n, P1, P2, subpixelR
             for i =1:cols
 
                 [r, c] = ind2sub([m, n], bestD(j, i));
-                c0 = L(j, i, bestD(j, i));
+                c0 = double(L(j, i, bestD(j, i)));
                 
                 if(r > 1 && r < m)
-                    cLeft = L(j, i, bestD(j, i)-1);
-                    cRight  = L(j, i, bestD(j, i)+1);
+                    cLeft = double(L(j, i, bestD(j, i)-1));
+                    cRight  = double(L(j, i, bestD(j, i)+1));
                   
                     
                     if (cRight < cLeft)
@@ -125,8 +125,8 @@ function [bestD, minC, mvSub, L1, L2, L3, L4] = sgm2d(C, m, n, P1, P2, subpixelR
                 end
                 
                 if(c>1 && c < n)
-                    cLeft = L(j, i, bestD(j, i)-m);
-                    cRight  = L(j, i, bestD(j, i)+m);
+                    cLeft = double(L(j, i, bestD(j, i)-m));
+                    cRight  = double(L(j, i, bestD(j, i)+m));
                     
                     if (cRight < cLeft)
                         mvSub(j, i, 1) = (cRight-cLeft)/(c0 - cLeft)/2.0;
