@@ -32,7 +32,7 @@ function [ mvCurLevel, mvPyd , minC] = pyramidal_sgm( I0, I1, numPyd )
         I1gray = rgb2gray(permute(I0pyd{l}, [2, 1, 3]));
         I2gray = rgb2gray(permute(I1pyd{l}, [2, 1, 3]));
         mvPrePermuted = permute(mvPreLevel, [2, 1, 3]);
-        C = calc_cost_pyd(I1gray, I2gray, mvPrePermuted, verSearchHalfWinSize, aggSize);
+        [C, bestDD] = calc_cost_pyd(I1gray, I2gray, mvPrePermuted, verSearchHalfWinSize, aggSize);
         C = permute(C, [2, 1, 3]);
         toc;
 %         C = calc_cost_coloc(I0pyd{l}, I1pyd{l}, mvPreLevel, verSearchHalfWinSize, aggSize);
