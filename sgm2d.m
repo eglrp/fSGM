@@ -26,6 +26,8 @@ function [bestD, minC, mvSub, L1, L2, L3, L4] = sgm2d(C, m, n, P1, P2, subpixelR
     tic;
     Ct = permute(C, [2,1,3]);
 
+    [lutR, lutC] = ind2sub([m, n], 1:dMax);
+    
     for i=1:cols
         ir = cols+1-i;
         
@@ -39,7 +41,7 @@ function [bestD, minC, mvSub, L1, L2, L3, L4] = sgm2d(C, m, n, P1, P2, subpixelR
             minLpre4 = min(L4(:, ir+1, :), [], 3);
      
             for d = 1:dMax
-                [r, c] = ind2sub([m, n], d);
+                r = lutR(d); c = lutC(d);
                 left  = min(n, max(1, c - 1));
                 right = min(n, max(1, c + 1));
                 up    = min(m, max(1, r - 1));
@@ -75,7 +77,7 @@ function [bestD, minC, mvSub, L1, L2, L3, L4] = sgm2d(C, m, n, P1, P2, subpixelR
             minLpre3 = min(L3(:, ir+1, :), [], 3);
             for d = 1:dMax
 
-                [r, c] = ind2sub([m, n], d);
+                r = lutR(d); c = lutC(d);
                 left  = min(n, max(1, c - 1));
                 right = min(n, max(1, c + 1));
                 up    = min(m, max(1, r - 1));
