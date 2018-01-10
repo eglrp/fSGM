@@ -30,28 +30,44 @@ tic;
 
 [offx, offy] = meshgrid(-2*halfSearchWinSize:2*halfSearchWinSize, -halfSearchWinSize:halfSearchWinSize);
 
-offx = reshape(offx, [], 1);
-offy = reshape(offy, [], 1);
+offx = reshape(offx, 1, []);
+offy = reshape(offy, 1, []);
 
+numAggPixels = aggSize * aggSize;
+ofx = repmat(offx, numAggPixels, 1);
+ofy = repmat(offy, numAggPixels, 1);
+
+halfAggSize = floor(aggSize/2);
+[aggOffx, aggOffy] = meshgrid(-halfAggSize:halfAggSize, -halfAggSize:halfAggSize);
+
+%main loop
 for ind = 1:numPixels
     
     [j, i] = ind2sub([rows, cols], ind);
     
-    %get 2D offset of disparity from 0 to maximun   
+    curPixelPosY = min(rows, max(1, j + aggOffy));
+    curPixelPosX = min(cols, max(1, i + aggOffx));
+    
+    indCur = sub2ind([rows, cols] , curPixelPosY(:), curPixelPosX(:));
+    
     mvxPre = preMv(j, i, 1);
     mvyPre = preMv(j, i, 2);
-    targetX = min(cols, max(1, round(offx + i + mvxPre)));
-    targetY = min(rows, max(1, round(offy + j + mvyPre)));
     
-    ind2 = sub2ind([rows, cols], targetY, targetX);
-
-    cenCur = cen1Flat(:, ind);
+    cX = repmat(curPixelPosX(:), 1, dMax);
+    cY = repmat(curPixelPosY(:), 1, dMax);
+    
+    tx = min(cols, max(1, round(ofx + cX + mvxPre)));
+    ty = min(rows, max(1, round(ofy + cY + mvyPre)));
+    
+    ind2 = sub2ind([rows, cols], ty, tx);
+    
     cenRef = cen2Flat(:, ind2);
+    cenRef = reshape(cenRef, maxHDCost, [], dMax);
+    cenCur = cen1Flat(:, indCur);
 
     diff = cenCur ~= cenRef;
-
-    cost = sum(diff);
-    CFlat(:, ind) = cost'; 
+    cost = sum(sum(diff));
+    CFlat(:, ind) = reshape(cost, [], 1)/numAggPixels; 
  
 end
 
@@ -61,6 +77,5 @@ for w = 1:dMax
     
 end
 
-C = imboxfilt3(C, [aggSize aggSize 1], 'Padding', 'replicate');
 
 toc;
