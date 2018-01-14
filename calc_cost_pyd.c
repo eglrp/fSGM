@@ -29,7 +29,7 @@ void census(unsigned char* img, unsigned * cen, int width, int height, int halfW
                     
                     y2 = y2 < 0? 0 : (y2 > height-1? height-1:y2);
                     x2 = x2 < 0? 0 : (x2 > width-1? width-1:x2);
-					if (img[x + offsetX + width*(y + offsetY)] >= centerValue)
+					if (img[x2 + width*y2] >= centerValue)
                         censusCode += 1;
 					censusCode = censusCode << 1;
 				}
@@ -297,14 +297,14 @@ void mexFunction(int nlhs, mxArray *plhs[],
     /* create the output matrix */
     const mwSize dims[]={width, height, dMax};
     plhs[0] = mxCreateNumericArray(3, dims, mxUINT8_CLASS, mxREAL);
-    const mwSize dims2[]={width, height};
-    plhs[1] = mxCreateNumericArray(2, dims2, mxUINT32_CLASS, mxREAL);
+    //const mwSize dims2[]={width, height};
+    //plhs[1] = mxCreateNumericArray(2, dims2, mxUINT32_CLASS, mxREAL);
     
     unsigned char* C = (unsigned char*) mxGetData(plhs[0]);
-    unsigned * bestD = (unsigned*) mxGetData(plhs[1]);
+    //unsigned * bestD = (unsigned*) mxGetData(plhs[1]);
         
-    unsigned* cen1 = (unsigned*)malloc(width * height * sizeof(unsigned));
-    unsigned *cen2 = (unsigned*)malloc(width * height * sizeof(unsigned));
+    unsigned* cen1 = (unsigned*)mxMalloc(width * height * sizeof(unsigned));
+    unsigned *cen2 = (unsigned*)mxMalloc(width * height * sizeof(unsigned));
 
     census(I1, cen1, width, height, 2);
     census(I2, cen2, width, height, 2);
@@ -312,7 +312,7 @@ void mexFunction(int nlhs, mxArray *plhs[],
     int winRadiusY = halfSearchWinSize;
     int winRadiusX = 2*halfSearchWinSize;
     int winRadiusAgg = (int)aggSize/2;
-    //mexPrintf("width: %d, height: %d, dMax: %d, winRadiusAgg: %d\n", width, height, dMax, winRadiusAgg);
+    mexPrintf("width: %d, height: %d, dMax: %d, winRadiusAgg: %d\n", width, height, dMax, winRadiusAgg);
     
     int mvWidth = mxGetM(prhs[2]);
     int mvHeight = mxGetN(prhs[2])/2;
@@ -361,7 +361,10 @@ void mexFunction(int nlhs, mxArray *plhs[],
         }
     }
     
-
+    mxFree(cen1);
+    mxFree(cen2);
+    
+    /*
     unsigned* minC;
     double* mvSub;
     int P1 = 6;
@@ -379,4 +382,5 @@ void mexFunction(int nlhs, mxArray *plhs[],
         Cre, width, height, dMax, 
         preMv, mvWidth, mvHeight, 
         winRadiusX*2 +1, winRadiusY*2+1, P1,  P2, 0);
+     */
 }
