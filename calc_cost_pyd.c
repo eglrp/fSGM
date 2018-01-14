@@ -13,6 +13,8 @@
  *
 */
 typedef unsigned char PathCost;
+#define MAX_PATH_COST 255
+
 void census(unsigned char* img, unsigned * cen, int width, int height, int halfWin)
 {
     
@@ -47,7 +49,7 @@ inline PathCost sgm_step(PathCost* L, //current path cost
     double dx, double dy, int searchWinX, int searchWinY, 
     int P1, int P2)
 {
-	PathCost minPathCost = 255;
+	PathCost minPathCost = MAX_PATH_COST;
 
     for (int sx = 0; sx < searchWinX; sx ++) {
         for (int sy = 0; sy < searchWinY; sy ++) {
@@ -121,123 +123,113 @@ void sgm2d(unsigned* bestD, unsigned* minC, double* mvSub,
     //mvSub = (double*) mxMalloc(sizeof(double)  * width * height * 2);
     
     unsigned char* L1 = (unsigned char*) mxMalloc (sizeof(unsigned char) * width * height * dMax); //
-    unsigned char* L2 = (unsigned char*) mxMalloc (sizeof(unsigned char) * width * height * dMax); //
+    //unsigned char* L2 = (unsigned char*) mxMalloc (sizeof(unsigned char) * width * height * dMax); //
     unsigned char* L3 = (unsigned char*) mxMalloc (sizeof(unsigned char) * width * height * dMax); //
-    unsigned char* L4 = (unsigned char*) mxMalloc (sizeof(unsigned char) * width * height * dMax); //
+    //unsigned char* L4 = (unsigned char*) mxMalloc (sizeof(unsigned char) * width * height * dMax); //
     unsigned * Sp = (unsigned *) mxMalloc (sizeof(unsigned ) * width * height * dMax); //
-    unsigned char minL[4];
+	memset(Sp, 0, sizeof(unsigned)*width*height*dMax);
+    PathCost minL1;
     
-    unsigned char* minL3 = (unsigned char*) mxMalloc(sizeof(unsigned char)* width);
+	PathCost* minL3 = (unsigned char*) mxMalloc(sizeof(unsigned char)* width);
     
     double* pMvx = mvPre;
     double* pMvy = mvPre + mvWidth * mvHeight;
     
-    int pass = 0;
-    int ystart = 0;
-    int yend = height-1;
-    int ystep = 1;
-
-    int xstart = 0;
-    int xend = width-1;
-    int xstep = 1;
     
-    if(pass == 1) {
-        ystart = height-1;
-        yend = 0;
-        ystep = -1;
-
-        xstart = width -1;
-        xend = 0;
-        xstep = -1;
-    } 
     
-    int pathCostPerRowEntry = width * dMax;
+    
+    
+    const int pathCostPerRowEntry = width * dMax;
        
-    
-    for(int y = ystart; y <= yend; y += ystep) {
-        unsigned char* L1ptr = L1 + y*pathCostPerRowEntry;
-        unsigned char* L2ptr = L2 + y*pathCostPerRowEntry;
-        unsigned char* L3ptr = L3 + y*pathCostPerRowEntry;
-        unsigned char* L4ptr = L4 + y*pathCostPerRowEntry;
-        unsigned char* Spptr = Sp + y*pathCostPerRowEntry;
-        unsigned char* Cptr = C + y*pathCostPerRowEntry;
-            
-        for (int x= xstart; x <= xend ; x += xstep) {
-            
-            if(x == xstart) {
-                minL[0] = minL[1] = 255;
-                for(int d = 0; d < dMax; d++) {
-                    
-                    L1ptr[xstart*dMax + d] = Cptr[xstart*dMax + d];
-                    L2ptr[xstart*dMax + d] = Cptr[xstart*dMax + d];
-                    
-                    if(L1ptr[d] < minL[0]) {
-                        minL[0] = L1ptr[d];
-                    }
-                    
-                    if(L2ptr[d] < minL[1]) {
-                        minL[1] = L2ptr[d];
-                    }
-                }
-            } 
-            
-            if(y == ystart) {
-                minL[2] = minL3[x] = 255;
-                
-                for(int d = 0; d < dMax; d++) {
-                    
-                    L3ptr[ystart* pathCostPerRowEntry + x*dMax + d] = Cptr[ystart* pathCostPerRowEntry + x*dMax + d];
-                    L4ptr[ystart* pathCostPerRowEntry + x*dMax + d] = Cptr[ystart* pathCostPerRowEntry + x*dMax + d];
-                    
-                    if(L3ptr[d] < minL[2]) {
-                        minL3[x] = L3ptr[d];
-                    }
-                    
-                    if(L4ptr[d] < minL[3]) {
-                        minL[3] = L4ptr[d];
-                    }
-                }
-            }
-            
-            
-            if(x > xstart) {
-                //hint map may have different size with image, must set width to mvWidth, otherwise will have 45degree error propagation issue 
-                //when 2nd pyd processing
-                double dx = pMvx[y*mvWidth + x] - pMvx[y*mvWidth + x - xstep];
-                double dy = pMvy[y*mvWidth + x] - pMvy[y*mvWidth + x - xstep];
-                PathCost minL1 = sgm_step(L1ptr + x*dMax,			//current path cost
-									L1ptr + (x-xstep)*dMax,			//previous path cost
-									minL[0],
-									Cptr + x*dMax,					//cost map
-									dx, dy, searchWinX, searchWinY, P1,  P2);
-                minL[0] = minL1;
-            }
-            
+	int ystart = 0;
+	int yend = height ;
+	int ystep = 1;
 
-            if(y > ystart) {
-                double dx = pMvx[y*mvWidth + x] - pMvx[(y-ystep)*mvWidth + x];
-                double dy = pMvy[y*mvWidth + x] - pMvy[(y-ystep)*mvWidth + x];
-				PathCost minL1 = sgm_step(L3ptr + x*dMax,			//current path cost
-									L3ptr -ystep*pathCostPerRowEntry + x*dMax, //previous path cost
-									minL3[x],
-									Cptr + x*dMax,					//cost map
-									dx, dy, searchWinX, searchWinY, P1, P2);
-                
-                minL3[x] = minL1;
-            }
-            
-            if(x > xstart && y > ystart) {
-            }
-            
-            for (int d = 0; d<dMax; d++) {
-                Spptr[x*dMax + d] = L1ptr[x*dMax+d] + L3ptr[x*dMax+d];
-            }
-        }
-    }
-    
+	int xstart = 0;
+	int xend = width ;
+	int xstep = 1;
+
+	for (int pass = 0; pass <= 1; pass++) {
+		if (pass == 1) {
+			ystart = height - 1;
+			yend = -1;
+			ystep = -1;
+
+			xstart = width - 1;
+			xend = -1;
+			xstep = -1;
+		}
+
+		for (int y = ystart; y != yend; y += ystep) {
+			PathCost* L1ptr = L1 + y*pathCostPerRowEntry;
+			//PathCost* L2ptr = L2 + y*pathCostPerRowEntry;
+			PathCost* L3ptr = L3 + y*pathCostPerRowEntry;
+			//PathCost* L4ptr = L4 + y*pathCostPerRowEntry;
+			unsigned* Spptr = Sp + y*pathCostPerRowEntry;
+			unsigned char* Cptr = C + y*pathCostPerRowEntry;
+
+			for (int x = xstart; x != xend; x += xstep) {
+
+				if (x == xstart) {
+					minL1 = MAX_PATH_COST;
+					for (int d = 0; d < dMax; d++) {
+
+						L1ptr[xstart*dMax + d] = Cptr[xstart*dMax + d];
+
+						if (L1ptr[d] < minL1) {
+							minL1 = L1ptr[d];
+						}
+					}
+				}
+
+				if (y == ystart) {
+					minL3[x] = MAX_PATH_COST;
+
+					for (int d = 0; d < dMax; d++) {
+
+						L3ptr[x*dMax + d] = Cptr[x*dMax + d];
+
+						if (L3ptr[d] < minL3[x]) {
+							minL3[x] = L3ptr[d];
+						}
+
+					}
+				}
+
+
+				if (x != xstart) {
+					//hint map may have different size with image, must set width to mvWidth, otherwise will have 45degree error propagation issue 
+					//when 2nd pyd processing
+					double dx = pMvx[y*mvWidth + x] - pMvx[y*mvWidth + x - xstep];
+					double dy = pMvy[y*mvWidth + x] - pMvy[y*mvWidth + x - xstep];
+					minL1 = sgm_step(L1ptr + x*dMax,			//current path cost
+						L1ptr + (x - xstep)*dMax,			//previous path cost
+						minL1,
+						Cptr + x*dMax,					//cost map
+						dx, dy, searchWinX, searchWinY, P1, P2);
+				}
+
+
+				if (y != ystart) {
+					double dx = pMvx[y*mvWidth + x] - pMvx[(y - ystep)*mvWidth + x];
+					double dy = pMvy[y*mvWidth + x] - pMvy[(y - ystep)*mvWidth + x];
+					minL3[x] = sgm_step(L3ptr + x*dMax,			//current path cost
+						L3ptr - ystep*pathCostPerRowEntry + x*dMax, //previous path cost
+						minL3[x],
+						Cptr + x*dMax,					//cost map
+						dx, dy, searchWinX, searchWinY, P1, P2);
+				}
+
+
+				for (int d = 0; d < dMax; d++) {
+					Spptr[x*dMax + d] +=  L1ptr[x*dMax + d] + L3ptr[x*dMax + d];
+				}
+			}
+		}
+	}
     
     for(int y = 0; y< height; y++) {
-        unsigned char* SpPtr = Sp + y*pathCostPerRowEntry;
+		unsigned* SpPtr = Sp + y*pathCostPerRowEntry;
         for (int x = 0; x <width; x++) {
             
             unsigned minCost = SpPtr[x*dMax];
@@ -254,10 +246,61 @@ void sgm2d(unsigned* bestD, unsigned* minC, double* mvSub,
         }
     }
     
+    double * ptrMvSubMvx = mvSub;
+    double * ptrMvSubMvy = mvSub + width*height;
+    
+    if(subpixelRefine) {
+        /*
+         * do subpixel quadratic interpolation:
+         *fit parabola into (x1=d-1, y1=C[d-1]), (x2=d, y2=C[d]), (x3=d+1, y3=C[d+1])
+         *then find minimum of the parabola
+         */
+        for(int y = 0; y< height; y++) {
+            unsigned* SpPtr = Sp + y*pathCostPerRowEntry;
+            
+            for (int x = 0; x <width; x++) {
+                unsigned bestIdx = bestD[y*width + x];
+                
+                double c0 = (double) (SpPtr[x*dMax + bestIdx]);
+                
+                int dx = bestIdx / searchWinY;
+                int dy = bestIdx % searchWinY;
+                
+                if(dy > 0 && dy < searchWinY - 1) {
+                    double cLeft = (double)(SpPtr[x*dMax + bestIdx - 1]);
+                    double cRight  = (double)(SpPtr[x*dMax + bestIdx + 1]);
+                    
+                    if (cRight < cLeft)
+                        ptrMvSubMvy[y*width + x] = (cRight-cLeft)/(c0 - cLeft)/2.0;
+                    else
+                        ptrMvSubMvy[y*width + x] = (cRight-cLeft)/(c0 - cRight)/2.0;
+                    
+                } else {
+                    ptrMvSubMvy[y*width + x] = 0;
+                }
+                
+                if(dx >0 && dx < searchWinX-1) {
+                    double cLeft = (double)(SpPtr[x*dMax + bestIdx - searchWinY]);
+                    double cRight  = (double)(SpPtr[x*dMax + bestIdx + searchWinY]);
+                    
+                    if (cRight < cLeft)
+                        ptrMvSubMvx[y*width + x] = (cRight-cLeft)/(c0 - cLeft)/2.0;
+                    else
+                        ptrMvSubMvx[y*width + x] = (cRight-cLeft)/(c0 - cRight)/2.0;
+                    
+                } else {
+                    ptrMvSubMvx[y*width + x] = 0;
+                }
+            }
+        }
+        
+    }
+       
+       
     mxFree(L1);
-    mxFree(L2);
+    //mxFree(L2);
     mxFree(L3);
-    mxFree(L4);
+    //mxFree(L4);
     mxFree(Sp);
     mxFree(minL3);
 }
@@ -286,6 +329,7 @@ void mexFunction(int nlhs, mxArray *plhs[],
     double aggSize= mxGetScalar(prhs[4]);
     int dMax = (4*halfSearchWinSize+1)*(2*halfSearchWinSize+1);
    
+    int subPixelRefine = mxGetScalar(prhs[5]);
     
     /* create the output matrix */
     const mwSize dims[]={width, height, dMax};
@@ -379,7 +423,7 @@ void mexFunction(int nlhs, mxArray *plhs[],
     sgm2d(bestD, minC, mvSub, 
         Cre, width, height, dMax, 
         preMv, mvWidth, mvHeight, 
-        winRadiusX*2 +1, winRadiusY*2+1, P1,  P2, 0);
+        winRadiusX*2 +1, winRadiusY*2+1, P1,  P2, subPixelRefine);
      
     mxFree(Cre);
     mxFree(cen1);

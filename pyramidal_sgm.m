@@ -26,15 +26,19 @@ function [ mvCurLevel, mvPyd , minC] = pyramidal_sgm( I0, I1, numPyd )
         
         %construct cost volume
         aggSize = 5;
+        if(l==numPyd)
+            aggSize = 1;
+        end
 
         
         tic;
         I1gray = rgb2gray(permute(I0pyd{l}, [2, 1, 3]));
         I2gray = rgb2gray(permute(I1pyd{l}, [2, 1, 3]));
         mvPrePermuted = permute(mvPreLevel, [2, 1, 3]);
-        [C, minIdx, minC] = calc_cost_pyd(I1gray, I2gray, mvPrePermuted, verSearchHalfWinSize, aggSize);
+        [C, minIdx, minC, mvSub] = calc_cost_pyd(I1gray, I2gray, mvPrePermuted, verSearchHalfWinSize, aggSize, l==1);
         
         minIdx = (minIdx') + 1;
+        mvSub = permute(mvSub, [2, 1, 3]);
 %         minC = 0;
 %         C = permute(C, [2, 1, 3]);
         toc;
@@ -46,7 +50,6 @@ function [ mvCurLevel, mvPyd , minC] = pyramidal_sgm( I0, I1, numPyd )
 
         %WTA
 %         [minC, minIdx] = min(C, [], 3);
-        mvSub = zeros(rowl, coll, 2);
        
         
         % recover mv from idx
