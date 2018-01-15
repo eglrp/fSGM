@@ -316,7 +316,7 @@ void calc_cost(unsigned char* C,
 	double* pMvx = preMv;
 	double* pMvy = preMv + mvWidth*mvHeight;
 	int winPixels = (2 * winRadiusAgg + 1)*(2 * winRadiusAgg + 1);
-
+    
 	for (int offy = -winRadiusY; offy <= winRadiusY; offy++) {
 		for (int offx = -winRadiusX; offx <= winRadiusX; offx++) {
 			int d = (offx + winRadiusX)* (2 * winRadiusY + 1) + offy + winRadiusY;
@@ -336,15 +336,25 @@ void calc_cost(unsigned char* C,
 							int y1 = y + aggy;
 							int x1 = x + aggx;
 
-							y1 = y1 < 0 ? 0 : (y1 > height - 1 ? height - 1 : y1);
-							x1 = x1 < 0 ? 0 : (x1 > width - 1 ? width - 1 : x1);
+                            if(y1 < 0 || y1 > height-1 || x1 <0 || x1 > width-1) {
+                                costSum += 5;  //add constant cost if not valid current pixel position
+                                continue;
+                            }
+                            
+							//y1 = y1 < 0 ? 0 : (y1 > height - 1 ? height - 1 : y1);
+							//x1 = x1 < 0 ? 0 : (x1 > width - 1 ? width - 1 : x1);
 
 							unsigned cenCode1 = cen1[width*y1 + x1];
 
 							int y2 = 1.0*(offy + y1) + mvy + 0.5;
 							int x2 = 1.0*(offx + x1) + mvx + 0.5;
-							y2 = y2 < 0 ? 0 : (y2 > height - 1 ? height - 1 : y2);
-							x2 = x2 < 0 ? 0 : (x2 > width - 1 ? width - 1 : x2);
+                            
+                            if(y2 < 0 || y2 > height-1 || x2 <0 || x2 > width-1) {
+                                costSum += 5; //add constant cost if not valid reference pixel position
+                                continue;
+                            }
+							//y2 = y2 < 0 ? 0 : (y2 > height - 1 ? height - 1 : y2);
+							//x2 = x2 < 0 ? 0 : (x2 > width - 1 ? width - 1 : x2);
 
 							unsigned cenCode2 = cen2[width*y2 + x2];
 
