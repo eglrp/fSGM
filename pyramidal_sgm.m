@@ -19,18 +19,14 @@ function [ mvCurLevel, mvPyd , minC] = pyramidal_sgm( I0, I1, numPyd )
     P2 = 64;
     % loop pyramidal levels
     for l = numPyd:-1:1
-        verSearchHalfWinSize = 4;
+        verSearchHalfWinSize = 5;
         rowl = size(I0pyd{l}, 1);
         coll = size(I0pyd{l}, 2);
         mvCurLevel = zeros(rowl, coll, 2);
         
         %construct cost volume
         aggSize = 5;
-        if(l==numPyd)
-            aggSize = 1;
-        end
 
-        
         tic;
         I1gray = rgb2gray(permute(I0pyd{l}, [2, 1, 3]));
         I2gray = rgb2gray(permute(I1pyd{l}, [2, 1, 3]));

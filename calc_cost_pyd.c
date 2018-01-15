@@ -13,6 +13,7 @@
  *
 */
 typedef unsigned char PathCost;
+typedef unsigned char PixelType;
 #define MAX_PATH_COST 255
 
 void census(unsigned char* img, unsigned * cen, int width, int height, int halfWin)
@@ -68,8 +69,9 @@ inline PathCost sgm_step(PathCost* L, //current path cost
                 min1 = Lpre[dtemp];
             }
             // ||d-d'|| < r
-            for(int k = -2; k<= 2; k++) {
-                for(int m = -2; m<= 2; m++) {
+			const int r = 2;
+            for(int k = -r; k<= r; k++) {
+                for(int m = -r; m<= r; m++) {
                     if(m == 0 && k == 0)
                         continue;
 
@@ -88,6 +90,7 @@ inline PathCost sgm_step(PathCost* L, //current path cost
 			bestCost = min(bestCost, min2);
 
             int d = sx * searchWinY + sy;
+			mxAssert(bestCost > LpreMin, "bestCost Must > LpreMin\n");
             L[d] = C[d] + bestCost - LpreMin;
 			minPathCost = min(L[d], minPathCost);
         }
@@ -113,20 +116,16 @@ inline PathCost sgm_step(PathCost* L, //current path cost
  *
  */
 void sgm2d(unsigned* bestD, unsigned* minC, double* mvSub, 
-        unsigned char* C, int width, int height, int dMax, 
+		PixelType* I1, unsigned char* C, int width, int height, int dMax,
         double* mvPre, int mvWidth, int mvHeight, 
         int searchWinX, int searchWinY, int P1, int P2, int subpixelRefine )
 {
     
-    //bestD = (unsigned*) mxMalloc(sizeof(unsigned)  * width * height);
-    //minC = (unsigned*) mxMalloc(sizeof(unsigned)  * width * height);
-    //mvSub = (double*) mxMalloc(sizeof(double)  * width * height * 2);
-    
-    unsigned char* L1 = (unsigned char*) mxMalloc (sizeof(unsigned char) * width * height * dMax); //
+    PathCost* L1 = (PathCost*) mxMalloc (sizeof(PathCost) * width * height * dMax); //
     //unsigned char* L2 = (unsigned char*) mxMalloc (sizeof(unsigned char) * width * height * dMax); //
-    unsigned char* L3 = (unsigned char*) mxMalloc (sizeof(unsigned char) * width * height * dMax); //
+	PathCost* L3 = (PathCost*) mxMalloc (sizeof(PathCost) * width * height * dMax); //
     //unsigned char* L4 = (unsigned char*) mxMalloc (sizeof(unsigned char) * width * height * dMax); //
-    unsigned * Sp = (unsigned *) mxMalloc (sizeof(unsigned ) * width * height * dMax); //
+    unsigned * Sp = (unsigned *) mxMalloc (sizeof(unsigned ) * width * height * dMax); //sum of path cost from all directions
 	memset(Sp, 0, sizeof(unsigned)*width*height*dMax);
     PathCost minL1;
     
@@ -135,12 +134,8 @@ void sgm2d(unsigned* bestD, unsigned* minC, double* mvSub,
     double* pMvx = mvPre;
     double* pMvy = mvPre + mvWidth * mvHeight;
     
-    
-    
-    
-    
     const int pathCostPerRowEntry = width * dMax;
-       
+	bool adpativeP2 = false;
 	int ystart = 0;
 	int yend = height ;
 	int ystep = 1;
@@ -174,11 +169,12 @@ void sgm2d(unsigned* bestD, unsigned* minC, double* mvSub,
 					minL1 = MAX_PATH_COST;
 					for (int d = 0; d < dMax; d++) {
 
-						L1ptr[xstart*dMax + d] = Cptr[xstart*dMax + d];
-
+						L1ptr[x*dMax + d] = Cptr[x*dMax + d];
+						/*
 						if (L1ptr[d] < minL1) {
 							minL1 = L1ptr[d];
 						}
+						*/
 					}
 				}
 
@@ -188,11 +184,11 @@ void sgm2d(unsigned* bestD, unsigned* minC, double* mvSub,
 					for (int d = 0; d < dMax; d++) {
 
 						L3ptr[x*dMax + d] = Cptr[x*dMax + d];
-
+						/*
 						if (L3ptr[d] < minL3[x]) {
 							minL3[x] = L3ptr[d];
 						}
-
+						*/
 					}
 				}
 
@@ -202,22 +198,29 @@ void sgm2d(unsigned* bestD, unsigned* minC, double* mvSub,
 					//when 2nd pyd processing
 					double dx = pMvx[y*mvWidth + x] - pMvx[y*mvWidth + x - xstep];
 					double dy = pMvy[y*mvWidth + x] - pMvy[y*mvWidth + x - xstep];
+					PixelType pixCur = I1[width*y + x];
+					PixelType pixPre = I1[width*y + x - xstep];
+					
 					minL1 = sgm_step(L1ptr + x*dMax,			//current path cost
 						L1ptr + (x - xstep)*dMax,			//previous path cost
 						minL1,
 						Cptr + x*dMax,					//cost map
-						dx, dy, searchWinX, searchWinY, P1, P2);
+						dx, dy, searchWinX, searchWinY, P1, adpativeP2 ? (abs((int)pixCur - (int)pixPre)> 30 ? P2 / 3 : P2) : P2);
 				}
 
 
 				if (y != ystart) {
 					double dx = pMvx[y*mvWidth + x] - pMvx[(y - ystep)*mvWidth + x];
 					double dy = pMvy[y*mvWidth + x] - pMvy[(y - ystep)*mvWidth + x];
+
+					PixelType pixCur = I1[width*y + x];
+					PixelType pixPre = I1[width*(y-ystep) + x];
+
 					minL3[x] = sgm_step(L3ptr + x*dMax,			//current path cost
 						L3ptr - ystep*pathCostPerRowEntry + x*dMax, //previous path cost
 						minL3[x],
 						Cptr + x*dMax,					//cost map
-						dx, dy, searchWinX, searchWinY, P1, P2);
+						dx, dy, searchWinX, searchWinY, P1, adpativeP2 ? (abs((int)pixCur - (int)pixPre)> 30 ? P2 / 3 : P2) : P2);
 				}
 
 
@@ -305,6 +308,56 @@ void sgm2d(unsigned* bestD, unsigned* minC, double* mvSub,
     mxFree(minL3);
 }
         
+void calc_cost(unsigned char* C, 
+	const unsigned* cen1, const unsigned* cen2, int width, int height,
+	const double* preMv, int mvWidth, int mvHeight, 
+	int winRadiusAgg, int winRadiusX, int winRadiusY)
+{
+	double* pMvx = preMv;
+	double* pMvy = preMv + mvWidth*mvHeight;
+	int winPixels = (2 * winRadiusAgg + 1)*(2 * winRadiusAgg + 1);
+
+	for (int offy = -winRadiusY; offy <= winRadiusY; offy++) {
+		for (int offx = -winRadiusX; offx <= winRadiusX; offx++) {
+			int d = (offx + winRadiusX)* (2 * winRadiusY + 1) + offy + winRadiusY;
+			//mexPrintf("d: %d\n", d);
+			unsigned char* pC = C + d * width * height;
+
+			for (int y = 0; y< height; y++) {
+				for (int x = 0; x< width; x++) {
+
+					unsigned costSum = 0;
+					double mvx = pMvx[mvWidth*y + x];
+					double mvy = pMvy[mvWidth*y + x];
+
+					for (int aggy = -winRadiusAgg; aggy <= winRadiusAgg; aggy++) {
+						for (int aggx = -winRadiusAgg; aggx <= winRadiusAgg; aggx++) {
+
+							int y1 = y + aggy;
+							int x1 = x + aggx;
+
+							y1 = y1 < 0 ? 0 : (y1 > height - 1 ? height - 1 : y1);
+							x1 = x1 < 0 ? 0 : (x1 > width - 1 ? width - 1 : x1);
+
+							unsigned cenCode1 = cen1[width*y1 + x1];
+
+							int y2 = 1.0*(offy + y1) + mvy + 0.5;
+							int x2 = 1.0*(offx + x1) + mvx + 0.5;
+							y2 = y2 < 0 ? 0 : (y2 > height - 1 ? height - 1 : y2);
+							x2 = x2 < 0 ? 0 : (x2 > width - 1 ? width - 1 : x2);
+
+							unsigned cenCode2 = cen2[width*y2 + x2];
+
+							int censusCost = _mm_popcnt_u32((cenCode1^cenCode2));
+							costSum += censusCost;
+						}
+					}
+					pC[y*width + x] = (1.0 * costSum / winPixels) + 0.5;
+				}
+			}
+		}
+	}
+}
 /* The gateway function */
 void mexFunction(int nlhs, mxArray *plhs[],
                  int nrhs, const mxArray *prhs[])
@@ -332,10 +385,11 @@ void mexFunction(int nlhs, mxArray *plhs[],
     int subPixelRefine = mxGetScalar(prhs[5]);
     
     /* create the output matrix */
-    const mwSize dims[]={width, height, dMax};
+    const mwSize dims[]={width, height, dMax};		//output: costvolume
+	const mwSize dims2[] = { width, height };		//output: best index map
+	const mwSize dims3[] = { width, height, 2 };	//output: subpixel position
+
     plhs[0] = mxCreateNumericArray(3, dims, mxUINT8_CLASS, mxREAL);
-    const mwSize dims2[]={width, height};
-	const mwSize dims3[] = { width, height, 2 };
     plhs[1] = mxCreateNumericArray(2, dims2, mxUINT32_CLASS, mxREAL);
     plhs[2] = mxCreateNumericArray(2, dims2, mxUINT32_CLASS, mxREAL);
 	plhs[3] = mxCreateNumericArray(3, dims3, mxDOUBLE_CLASS, mxREAL);
@@ -358,51 +412,10 @@ void mexFunction(int nlhs, mxArray *plhs[],
     int mvWidth = mxGetM(prhs[2]);
     int mvHeight = mxGetN(prhs[2])/2;
     
-    double* pMvx = preMv;
-    double* pMvy = preMv + mvWidth*mvHeight;
-	int winPixels = (2 * winRadiusAgg + 1)*(2 * winRadiusAgg + 1);
-    for (int offy = -winRadiusY; offy <= winRadiusY; offy++) {
-        for(int offx = -winRadiusX; offx <= winRadiusX; offx ++) {
-            int d = (offx + winRadiusX)* (2*winRadiusY + 1) + offy + winRadiusY;
-            //mexPrintf("d: %d\n", d);
-            unsigned char* pC = C + d * width * height;
-            
-            for (int y = 0; y< height; y++) {
-                for(int x= 0; x< width; x++) {
-                    
-                    unsigned costSum = 0;
-                    double mvx = pMvx[mvWidth*y + x];
-                    double mvy = pMvy[mvWidth*y + x];
-                            
-                    for (int aggy = -winRadiusAgg; aggy <= winRadiusAgg; aggy ++) {
-                        for (int aggx = -winRadiusAgg; aggx <=winRadiusAgg; aggx++){
-                            
-                            int y1 = y + aggy;
-                            int x1 = x + aggx;
-                            
-                            y1 = y1 < 0 ? 0 : (y1 > height-1? height-1: y1);
-                            x1 = x1 < 0 ? 0 : (x1 > width -1? width -1 :x1);
-
-                            unsigned cenCode1 = cen1[width*y1 + x1];
-                            
-                            int y2 = 1.0*(offy + y1) + mvy + 0.5;
-                            int x2 = 1.0*(offx + x1) + mvx + 0.5;
-                            y2 = y2 < 0 ? 0 :(y2 > height-1? height -1:y2);
-                            x2 = x2 < 0 ? 0 :(x2 > width -1? width -1 :x2);
-
-                            unsigned cenCode2 = cen2[width*y2 + x2];
-                            
-                            int censusCost = _mm_popcnt_u32((cenCode1^cenCode2));
-                            costSum += censusCost;
-                        }
-                    }
-                    pC[y*width + x] = (1.0 * costSum / winPixels) + 0.5;
-                }
-            }
-        }
-    }
     
-
+    //construct cost volume
+	calc_cost(C, cen1, cen2, width, height, preMv, mvWidth, mvHeight,
+		winRadiusAgg, winRadiusX, winRadiusY);
     
     
     int P1 = 6;
@@ -420,8 +433,10 @@ void mexFunction(int nlhs, mxArray *plhs[],
             }
         }
     }
+
+	//perform sgm
     sgm2d(bestD, minC, mvSub, 
-        Cre, width, height, dMax, 
+        I1, Cre, width, height, dMax, 
         preMv, mvWidth, mvHeight, 
         winRadiusX*2 +1, winRadiusY*2+1, P1,  P2, subPixelRefine);
      
