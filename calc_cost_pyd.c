@@ -16,7 +16,7 @@ typedef unsigned char PathCost;
 typedef unsigned char PixelType;
 #define MAX_PATH_COST 255
 
-void census(unsigned char* img, unsigned * cen, int width, int height, int halfWin)
+void census(PixelType* img, unsigned * cen, int width, int height, int halfWin)
 {
     
     
@@ -121,10 +121,11 @@ void sgm2d(unsigned* bestD, unsigned* minC, double* mvSub,
         int searchWinX, int searchWinY, int P1, int P2, int subpixelRefine )
 {
     
-    PathCost* L1 = (PathCost*) mxMalloc (sizeof(PathCost) * width * height * dMax); //
-    //unsigned char* L2 = (unsigned char*) mxMalloc (sizeof(unsigned char) * width * height * dMax); //
-	PathCost* L3 = (PathCost*) mxMalloc (sizeof(PathCost) * width * height * dMax); //
-    //unsigned char* L4 = (unsigned char*) mxMalloc (sizeof(unsigned char) * width * height * dMax); //
+	//allocate path cost buffers
+    PathCost* L1 = (PathCost*) mxMalloc (sizeof(PathCost) * 2 * dMax);			//Left -> Right direction
+    PathCost* L2 = (PathCost*) mxMalloc (sizeof(PathCost) * 2 * width * dMax);  //top-left -> bottom right direction
+	PathCost* L3 = (PathCost*) mxMalloc (sizeof(PathCost) * 2 * width * dMax);	//up -> bottom direction
+	PathCost* L4 = (PathCost*) mxMalloc (sizeof(PathCost) * 2 * width * dMax);  //top-right->bottom left direction
     unsigned * Sp = (unsigned *) mxMalloc (sizeof(unsigned ) * width * height * dMax); //sum of path cost from all directions
 	memset(Sp, 0, sizeof(unsigned)*width*height*dMax);
     PathCost minL1;
@@ -155,11 +156,13 @@ void sgm2d(unsigned* bestD, unsigned* minC, double* mvSub,
 			xstep = -1;
 		}
 
+		PathCost* ptrL1Pre = L1;
+		PathCost* ptrL1Cur = L1 + dMax;
+		PathCost* ptrL3Pre = L3;
+		PathCost* ptrL3Cur = L3 + pathCostPerRowEntry;
+
 		for (int y = ystart; y != yend; y += ystep) {
-			PathCost* L1ptr = L1 + y*pathCostPerRowEntry;
-			//PathCost* L2ptr = L2 + y*pathCostPerRowEntry;
-			PathCost* L3ptr = L3 + y*pathCostPerRowEntry;
-			//PathCost* L4ptr = L4 + y*pathCostPerRowEntry;
+
 			unsigned* Spptr = Sp + y*pathCostPerRowEntry;
 			unsigned char* Cptr = C + y*pathCostPerRowEntry;
 
@@ -167,29 +170,12 @@ void sgm2d(unsigned* bestD, unsigned* minC, double* mvSub,
 
 				if (x == xstart) {
 					minL1 = MAX_PATH_COST;
-					for (int d = 0; d < dMax; d++) {
-
-						L1ptr[x*dMax + d] = Cptr[x*dMax + d];
-						/*
-						if (L1ptr[d] < minL1) {
-							minL1 = L1ptr[d];
-						}
-						*/
-					}
+					memcpy(ptrL1Cur, Cptr + x*dMax, sizeof(PathCost)*dMax);
 				}
 
 				if (y == ystart) {
 					minL3[x] = MAX_PATH_COST;
-
-					for (int d = 0; d < dMax; d++) {
-
-						L3ptr[x*dMax + d] = Cptr[x*dMax + d];
-						/*
-						if (L3ptr[d] < minL3[x]) {
-							minL3[x] = L3ptr[d];
-						}
-						*/
-					}
+					memcpy(ptrL3Cur, Cptr + x*dMax, sizeof(PathCost)*dMax);
 				}
 
 
@@ -201,8 +187,8 @@ void sgm2d(unsigned* bestD, unsigned* minC, double* mvSub,
 					PixelType pixCur = I1[width*y + x];
 					PixelType pixPre = I1[width*y + x - xstep];
 					
-					minL1 = sgm_step(L1ptr + x*dMax,			//current path cost
-						L1ptr + (x - xstep)*dMax,			//previous path cost
+					minL1 = sgm_step(ptrL1Cur,			//current path cost
+						ptrL1Pre,						//previous path cost
 						minL1,
 						Cptr + x*dMax,					//cost map
 						dx, dy, searchWinX, searchWinY, P1, adpativeP2 ? (abs((int)pixCur - (int)pixPre)> 30 ? P2 / 3 : P2) : P2);
@@ -216,8 +202,8 @@ void sgm2d(unsigned* bestD, unsigned* minC, double* mvSub,
 					PixelType pixCur = I1[width*y + x];
 					PixelType pixPre = I1[width*(y-ystep) + x];
 
-					minL3[x] = sgm_step(L3ptr + x*dMax,			//current path cost
-						L3ptr - ystep*pathCostPerRowEntry + x*dMax, //previous path cost
+					minL3[x] = sgm_step(ptrL3Cur + x*dMax,//current path cost
+						ptrL3Pre + x*dMax,				//previous path cost
 						minL3[x],
 						Cptr + x*dMax,					//cost map
 						dx, dy, searchWinX, searchWinY, P1, adpativeP2 ? (abs((int)pixCur - (int)pixPre)> 30 ? P2 / 3 : P2) : P2);
@@ -225,9 +211,20 @@ void sgm2d(unsigned* bestD, unsigned* minC, double* mvSub,
 
 
 				for (int d = 0; d < dMax; d++) {
-					Spptr[x*dMax + d] +=  L1ptr[x*dMax + d] + L3ptr[x*dMax + d];
+					Spptr[x*dMax + d] +=  ptrL1Cur[d] + ptrL3Cur[x*dMax + d];
 				}
+
+				//swap buffer pointer for left->right direction
+				PathCost* tmp = ptrL1Pre;
+				ptrL1Pre = ptrL1Cur;
+				ptrL1Cur = tmp;
+
 			}
+
+			//swap buffer pointer for top->bottom direction
+			PathCost* tmp = ptrL3Pre;
+			ptrL3Pre = ptrL3Cur;
+			ptrL3Cur = tmp;
 		}
 	}
     
@@ -301,9 +298,9 @@ void sgm2d(unsigned* bestD, unsigned* minC, double* mvSub,
        
        
     mxFree(L1);
-    //mxFree(L2);
+    mxFree(L2);
     mxFree(L3);
-    //mxFree(L4);
+    mxFree(L4);
     mxFree(Sp);
     mxFree(minL3);
 }
