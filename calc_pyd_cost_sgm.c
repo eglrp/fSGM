@@ -1,16 +1,31 @@
 #include "mex.h"
 #include <nmmintrin.h>
 /*
- * calc_cost_pyd.c 
- *
+ * calc_cost_pyd_sgm.c 
+ * Perfrom cost volume construct and sgm for pyramidal sgm OF method. 
+ * 
+ * Description: 
  * Construct a cost volume for image 1/image 2 with fixed search region. (search center could be initialized by a given 
- * mv map
+ * mv map, and then perform sgm on the generated Cost volume
+ * the output of this program is a 2D index map, each element is the corresponding best cost index for each pixel 
  * 
  *
  * The calling syntax is:
  *
- *      C = calc_cost_pyd(I1, I2, preMv, halfSearchWinSize, aggSize)
+ *      [C, minIdx, minC, mvSub] = calc_cost_sgm(I1, I2, preMv, halfSearchWinSize, aggSize, subPixelRefine)
+ *     
+ * Input:
+ * I1/I2 are input images
+ * preMv is mv map from previous pyramidal level, must be have same or large size with I1/I2
+ * halfSearchWinSize is the half search windows size in vertical direction. it is doubled in horizontal direction
+ * aggSize is the aggregation window size. typically 5x5 is good
+ * subPixelRefine: enable sub-pixel position calculation. if set mvSub contains the subpixel location of current level.  
  *
+ * Output:
+ * C: generated Cost volume
+ * minIdx: output index (disparity) by sgm
+ * minC: the corresponding sum of the path cost w.r.t. minIdx
+ * mvSub: subpixel localtion
 */
 typedef unsigned char PathCost;
 typedef unsigned char PixelType;
