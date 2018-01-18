@@ -86,7 +86,7 @@ inline void sgm_step(PathCost* L, //current path cost
                 min1 = Lpre[dtemp];
             }
             // ||d-d'|| < r
-            const int r = 2;
+            const int r =1;
             for(int k = -r; k<= r; k++) {
                 for(int m = -r; m<= r; m++) {
                     if(m == 0 && k == 0)
@@ -404,7 +404,7 @@ void calc_cost(unsigned char* C,
     double* pMvx = preMv;
     double* pMvy = preMv + mvWidth*mvHeight;
     int winPixels = (2 * winRadiusAgg + 1)*(2 * winRadiusAgg + 1);
-    
+    const CostType defaultCost = 5;
     for (int offy = -winRadiusY; offy <= winRadiusY; offy++) {
         for (int offx = -winRadiusX; offx <= winRadiusX; offx++) {
             int d = (offx + winRadiusX)* (2 * winRadiusY + 1) + offy + winRadiusY;
@@ -425,7 +425,7 @@ void calc_cost(unsigned char* C,
                             int x1 = x + aggx;
 
                             if(y1 < 0 || y1 > height-1 || x1 <0 || x1 > width-1) {
-                                costSum += 5;  //add constant cost if not valid current pixel position
+                                costSum += defaultCost;  //add constant cost if not valid current pixel position
                                 continue;
                             }
                             
@@ -438,7 +438,7 @@ void calc_cost(unsigned char* C,
                             int x2 = 1.0*(offx + x1) + mvx + 0.5;
                             
                             if(y2 < 0 || y2 > height-1 || x2 <0 || x2 > width-1) {
-                                costSum += 5; //add constant cost if not valid reference pixel position
+                                costSum += defaultCost; //add constant cost if not valid reference pixel position
                                 continue;
                             }
                             //y2 = y2 < 0 ? 0 : (y2 > height - 1 ? height - 1 : y2);
@@ -479,8 +479,9 @@ void mexFunction(int nlhs, mxArray *plhs[],
     double halfSearchWinSize = mxGetScalar(prhs[3]);
     double aggSize= mxGetScalar(prhs[4]);
     int dMax = (4*halfSearchWinSize+1)*(2*halfSearchWinSize+1);
-   
     int subPixelRefine = mxGetScalar(prhs[5]);
+    int P1 = mxGetScalar(prhs[6]);
+    int P2 = mxGetScalar(prhs[7]);
     
     /* create the output matrix */
     const mwSize dims[]={width, height, dMax};      //output: costvolume
@@ -514,10 +515,6 @@ void mexFunction(int nlhs, mxArray *plhs[],
     //construct cost volume
     calc_cost(C, cen1, cen2, width, height, preMv, mvWidth, mvHeight,
         winRadiusAgg, winRadiusX, winRadiusY);
-    
-    
-    int P1 = 6;
-    int P2 = 64;
     
     int totalElementNum = width*height*dMax;
     CostType* Cre = (CostType*) mxMalloc(totalElementNum*sizeof(CostType));
