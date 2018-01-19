@@ -75,6 +75,7 @@ inline void sgm_step(PathCost* L, //current path cost
             int ypre = sy + dy  + 0.5;
             int xpre = sx + dx  + 0.5;
 
+            //mxAssert((int)LpreMin + P2 < 256);
             PathCost min1 = LpreMin + P2;
             PathCost min2 = LpreMin + P2;
             PathCost min3 = LpreMin + P2;
@@ -86,7 +87,7 @@ inline void sgm_step(PathCost* L, //current path cost
                 min1 = Lpre[dtemp];
             }
             // ||d-d'|| < r
-            const int r =1;
+            const int r = 2;
             for(int k = -r; k<= r; k++) {
                 for(int m = -r; m<= r; m++) {
                     if(m == 0 && k == 0)

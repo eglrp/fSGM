@@ -59,8 +59,8 @@ function [ mvCurLevel, mvPyd , minC] = pyramidal_sgm( I0, I1, numPyd )
             %pass to next level, need to upscale mv map size and also the
             %mv magnitude. 
                     
-%             mvCurLevel(:,:,1) = medfilt2(mvCurLevel(:,:,1));
-%             mvCurLevel(:,:,2) = medfilt2(mvCurLevel(:,:,2));
+            mvCurLevel(:,:,1) = medfilt2(mvCurLevel(:,:,1));
+            mvCurLevel(:,:,2) = medfilt2(mvCurLevel(:,:,2));
             mvPreLevel = 2*imresize(mvCurLevel, 2, 'nearest');
         end
 
