@@ -68,7 +68,7 @@ inline void sgm_step(PathCost* L, //current path cost
 {
     PathCost minPathCost = MAX_PATH_COST;
     int dMax = searchWinX * searchWinY;
-    PathCost LpreMin = Lpre[dMax];
+    PathCost LpreMin = Lpre[dMax]; //get minimum value of pre path cost
     for (int sx = 0; sx < searchWinX; sx ++) {
         for (int sy = 0; sy < searchWinY; sy ++) {
 
@@ -114,8 +114,15 @@ inline void sgm_step(PathCost* L, //current path cost
         }
     }
 
-    L[dMax] = minPathCost;
+    L[dMax] = minPathCost; //set minimum value of current path cost
 }
+
+inline int adaptive_P2(int P2, int pixCur, int pixPre) {
+    const int threshold = 50;
+    
+    return (abs(pixCur - pixPre) > threshold ? P2 / 8 : P2);
+}
+
 /* sgm on 3-D cost volume
  * Output:
  * bestD is the output best index along the third dimension
@@ -134,7 +141,7 @@ inline void sgm_step(PathCost* L, //current path cost
  *
  */
 void sgm2d(unsigned* bestD, unsigned* minC, double* mvSub, 
-        PixelType* I1, unsigned char* C, int width, int height, int dMax,
+        PixelType* I1, CostType* C, int width, int height, int dMax,
         double* mvPre, int mvWidth, int mvHeight, 
         int searchWinX, int searchWinY, int P1, int P2, int subpixelRefine )
 {
@@ -241,10 +248,10 @@ void sgm2d(unsigned* bestD, unsigned* minC, double* mvSub,
                     PixelType pixCur = I1[width*y + x];
                     PixelType pixPre = I1[width*y + x - xstep];
                     
-                    sgm_step(ptrL1Cur,          //current path cost
-                        ptrL1Pre,                       //previous path cost
+                    sgm_step(ptrL1Cur,              //current path cost
+                        ptrL1Pre,                   //previous path cost
                         ptrCCur,                    //cost map
-                        dx, dy, searchWinX, searchWinY, P1, adpativeP2 ? (abs((int)pixCur - (int)pixPre)> 10 ? P2 / 4 : P2) : P2);
+                        dx, dy, searchWinX, searchWinY, P1, adpativeP2 ? adaptive_P2(P2, pixCur, pixPre) : P2);
                 }
 
 
@@ -255,10 +262,10 @@ void sgm2d(unsigned* bestD, unsigned* minC, double* mvSub,
                     PixelType pixCur = I1[width*y + x];
                     PixelType pixPre = I1[width*(y-ystep) + x];
 
-                    sgm_step(ptrL3Cur,//current path cost
-                        ptrL3Pre,               //previous path cost
+                    sgm_step(ptrL3Cur,              //current path cost
+                        ptrL3Pre,                   //previous path cost
                         ptrCCur,                    //cost map
-                        dx, dy, searchWinX, searchWinY, P1, adpativeP2 ? (abs((int)pixCur - (int)pixPre)> 10 ? P2 / 4 : P2) : P2);
+                        dx, dy, searchWinX, searchWinY, P1, adpativeP2 ? adaptive_P2(P2, pixCur, pixPre) : P2);
                 }
 
                 if (enableDiagnalPath) {
@@ -269,10 +276,10 @@ void sgm2d(unsigned* bestD, unsigned* minC, double* mvSub,
                         PixelType pixCur = I1[width*y + x];
                         PixelType pixPre = I1[width*(y - ystep) + x - xstep];
 
-                        sgm_step(ptrL2Cur,//current path cost
+                        sgm_step(ptrL2Cur,          //current path cost
                             ptrL2Pre,               //previous path cost
-                            ptrCCur,                    //cost map
-                            dx, dy, searchWinX, searchWinY, P1, adpativeP2 ? (abs((int)pixCur - (int)pixPre) > 10 ? P2 / 4 : P2) : P2);
+                            ptrCCur,                //cost map
+                            dx, dy, searchWinX, searchWinY, P1, adpativeP2 ? adaptive_P2(P2, pixCur, pixPre) : P2);
                     }
 
                     if (x != xend && y != ystart) {
@@ -282,10 +289,10 @@ void sgm2d(unsigned* bestD, unsigned* minC, double* mvSub,
                         PixelType pixCur = I1[width*y + x];
                         PixelType pixPre = I1[width*(y - ystep) + x + xstep];
 
-                        sgm_step(ptrL4Cur,//current path cost
+                        sgm_step(ptrL4Cur,          //current path cost
                             ptrL4Pre,               //previous path cost
-                            ptrCCur,                    //cost map
-                            dx, dy, searchWinX, searchWinY, P1, adpativeP2 ? (abs((int)pixCur - (int)pixPre) > 10 ? P2 / 4 : P2) : P2);
+                            ptrCCur,                //cost map
+                            dx, dy, searchWinX, searchWinY, P1, adpativeP2 ? adaptive_P2(P2, pixCur, pixPre) : P2);
 
                     }
                 }

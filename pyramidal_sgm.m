@@ -13,7 +13,7 @@ function [ mvCurLevel, mvPyd , minC] = pyramidal_sgm( I0, I1, numPyd )
     end
     
     P1 = 6;
-    P2 = 64;
+    P2 = 32;
     aggSize = 5;
     verSearchHalfWinSize = 4;
     
