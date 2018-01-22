@@ -108,8 +108,8 @@ inline void sgm_step(PathCost* L, //current path cost
             bestCost = min(bestCost, min2);
 
             int d = sx * searchWinY + sy;
-            mxAssert(bestCost > LpreMin, "bestCost Must > LpreMin\n");
-            L[d] = C[d] + bestCost - LpreMin;
+            mxAssert(C[d] + bestCost >= LpreMin, "bestCost Must > LpreMin\n");
+            L[d] = (C[d] + bestCost) - LpreMin;
             minPathCost = min(L[d], minPathCost);
         }
     }
@@ -212,7 +212,7 @@ void sgm2d(unsigned* bestD, unsigned* minC, double* mvSub,
 
                 if (x == xstart) {
                     memcpy(ptrL1Cur, ptrCCur, sizeof(PathCost)*dMax);
-                    ptrL1Cur[dMax] = MAX_PATH_COST;
+                    ptrL1Cur[dMax] = 0;
 
                     if (enableDiagnalPath) {
                         memcpy(ptrL2Cur, ptrCCur, sizeof(PathCost)*dMax);
@@ -222,21 +222,21 @@ void sgm2d(unsigned* bestD, unsigned* minC, double* mvSub,
 
                 if (y == ystart) {
                     memcpy(ptrL3Cur, ptrCCur, sizeof(PathCost)*dMax);
-                    ptrL3Cur[dMax] = MAX_PATH_COST;
+                    ptrL3Cur[dMax] = 0;
 
                     if (enableDiagnalPath) {
                         memcpy(ptrL2Cur, ptrCCur, sizeof(PathCost)*dMax);
-                        ptrL2Cur[dMax] = MAX_PATH_COST;
+                        ptrL2Cur[dMax] = 0;
 
                         memcpy(ptrL4Cur, ptrCCur, sizeof(PathCost)*dMax);
-                        ptrL4Cur[dMax] = MAX_PATH_COST;
+                        ptrL4Cur[dMax] = 0;
                     }
                 }
 
                 if (x == xend) {
                     if (enableDiagnalPath) {
                         memcpy(ptrL4Cur, ptrCCur, sizeof(PathCost)*dMax);
-                        ptrL4Cur[dMax] = MAX_PATH_COST;
+                        ptrL4Cur[dMax] = 0;
                     }
                 }
 
