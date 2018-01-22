@@ -413,19 +413,23 @@ void calc_cost(unsigned char* C,
     double* pMvy = preMv + mvWidth*mvHeight;
     int winPixels = (2 * winRadiusAgg + 1)*(2 * winRadiusAgg + 1);
     const CostType defaultCost = 5;
-    for (int offy = -winRadiusY; offy <= winRadiusY; offy++) {
-        for (int offx = -winRadiusX; offx <= winRadiusX; offx++) {
-            int d = (offx + winRadiusX)* (2 * winRadiusY + 1) + offy + winRadiusY;
-            //mexPrintf("d: %d\n", d);
-            CostType* pC = C + d * width * height;
+    int dMax = (2 * winRadiusX + 1) * (2 * winRadiusY + 1);
 
-            for (int y = 0; y< height; y++) {
-                for (int x = 0; x< width; x++) {
-
+    for (int y = 0; y< height; y++) {
+        for (int x = 0; x< width; x++) {
+            CostType* ptrC = C + y*dMax*width + dMax*x;
+            double mvx = pMvx[mvWidth*y + x];
+            double mvy = pMvy[mvWidth*y + x];
+            
+            int d = 0;
+            for (int offx = -winRadiusX; offx <= winRadiusX; offx++) {
+                for (int offy = -winRadiusY; offy <= winRadiusY; offy++) {
+                
+                    //int d = (offx + winRadiusX)* (2 * winRadiusY + 1) + offy + winRadiusY;
+                    //mexPrintf("d: %d\n", d);
+                  
                     unsigned costSum = 0;
-                    double mvx = pMvx[mvWidth*y + x];
-                    double mvy = pMvy[mvWidth*y + x];
-
+                   
                     for (int aggy = -winRadiusAgg; aggy <= winRadiusAgg; aggy++) {
                         for (int aggx = -winRadiusAgg; aggx <= winRadiusAgg; aggx++) {
 
@@ -458,7 +462,8 @@ void calc_cost(unsigned char* C,
                             costSum += censusCost;
                         }
                     }
-                    pC[y*width + x] = (1.0 * costSum / winPixels) + 0.5;
+                    ptrC[d] = (1.0 * costSum / winPixels) + 0.5;
+                    d++;
                 }
             }
         }
@@ -523,27 +528,13 @@ void mexFunction(int nlhs, mxArray *plhs[],
     //construct cost volume
     calc_cost(C, cen1, cen2, width, height, preMv, mvWidth, mvHeight,
         winRadiusAgg, winRadiusX, winRadiusY);
-    
-    int totalElementNum = width*height*dMax;
-    CostType* Cre = (CostType*) mxMalloc(totalElementNum*sizeof(CostType));
-    for(int d = 0; d< dMax; d++) { 
-        for (int y = 0; y< height; y++) {
-            for(int x = 0; x <width; x++) {
-                int indOrig = d*width*height + (y*width + x);
-                int indTarget = y* width *dMax + x*dMax + d;
-                mxAssert(indOrig < totalElementNum && indTarget < totalElementNum, "incorrect indexing");
-                Cre[indTarget] = C[indOrig];
-            }
-        }
-    }
 
     //perform sgm
     sgm2d(bestD, minC, mvSub, 
-        I1, Cre, width, height, dMax, 
+        I1, C, width, height, dMax, 
         preMv, mvWidth, mvHeight, 
         winRadiusX*2 +1, winRadiusY*2+1, P1,  P2, subPixelRefine);
-     
-    mxFree(Cre);
+    
     mxFree(cen1);
     mxFree(cen2);
     
