@@ -39,28 +39,36 @@ function [ mvCurLevel, mvPyd , minC] = pyramidal_sgm( I0, I1, numPyd )
         I2gray = rgb2gray(permute(I1pyd{l}, [2, 1, 3]));
         mvPrePermuted = permute(mvPreLevel, [2, 1, 3]);
         %construct cost volume and SGM
-        [~, minIdx, minC, mvSub] = calc_pyd_cost_sgm(I1gray, I2gray, mvPrePermuted, verSearchHalfWinSize, aggSize, l==1, P1, P2);
-        minIdx = minIdx' + 1;
+        
+%         if(l==numPyd)
+            [~, minIdx, minC, mvSub] = calc_pyd_cost_sgm(I1gray, I2gray, mvPrePermuted, verSearchHalfWinSize, aggSize, l==1, P1, P2);
+            minIdx = minIdx' + 1; 
+%         else
+%             [minC, mvSub] = calc_pyd_cost_sgm_ng(I1gray, I2gray, mvPrePermuted, 1, 2, 0, P1, P2);
+%         end
         mvSub = permute(mvSub, [2, 1, 3]);
         toc;
         
+%         if(l == numPyd) 
         % recover mv from idx
-        [r, c] = ind2sub([2*verSearchHalfWinSize+1, 4*verSearchHalfWinSize + 1], minIdx(:));
-        
-        mvx = c - 2*verSearchHalfWinSize - 1;
-        mvy = r - verSearchHalfWinSize - 1;
-   
-        mvCurLevel(:,:,1) = reshape(mvx, [rowl, coll]);       
-        mvCurLevel(:,:,2) = reshape(mvy, [rowl, coll]);
-        mvCurLevel = mvCurLevel + mvPreLevel(1:rowl, 1:coll, :) + mvSub;
-        
+            [r, c] = ind2sub([2*verSearchHalfWinSize+1, 4*verSearchHalfWinSize + 1], minIdx(:));
+
+            mvx = c - 2*verSearchHalfWinSize - 1;
+            mvy = r - verSearchHalfWinSize - 1;
+
+            mvCurLevel(:,:,1) = reshape(mvx, [rowl, coll]);       
+            mvCurLevel(:,:,2) = reshape(mvy, [rowl, coll]);
+            mvCurLevel = mvCurLevel + mvPreLevel(1:rowl, 1:coll, :) + mvSub;
+%         else
+%             mvCurLevel = mvSub;
+%         end
         mvPyd{l} = mvCurLevel;
         if (l > 1)
             %pass to next level, need to upscale mv map size and also the
             %mv magnitude. 
                     
-            mvCurLevel(:,:,1) = medfilt2(mvCurLevel(:,:,1));
-            mvCurLevel(:,:,2) = medfilt2(mvCurLevel(:,:,2));
+%             mvCurLevel(:,:,1) = medfilt2(mvCurLevel(:,:,1));
+%             mvCurLevel(:,:,2) = medfilt2(mvCurLevel(:,:,2));
             mvPreLevel = 2*imresize(mvCurLevel, 2, 'nearest');
         end
 

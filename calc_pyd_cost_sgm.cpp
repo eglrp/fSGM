@@ -1,5 +1,6 @@
 #include "mex.h"
 #include <nmmintrin.h>
+#include "common.h"
 /*
  * calc_cost_pyd_sgm.c 
  * Perfrom cost volume construct and sgm for pyramidal sgm OF method. 
@@ -27,42 +28,11 @@
  * minC: the corresponding sum of the path cost w.r.t. minIdx
  * mvSub: subpixel localtion
 */
-typedef unsigned char PathCost;
-typedef unsigned char PixelType;
-typedef unsigned char CostType;
-
-#define MAX_PATH_COST 255
-
-void census(PixelType* img, unsigned * cen, int width, int height, int halfWin)
-{
-    
-    
-    for (int y = 0; y< height; y++) {
-        for(int x= 0; x< width; x++) {
-            
-            unsigned censusCode = 0;
-            unsigned char centerValue = img[x +  width*y];
-            for (int offsetY = -halfWin; offsetY <= halfWin; ++offsetY) {
-                for (int offsetX = -halfWin; offsetX <= halfWin; ++offsetX) {
-                    int y2 = y + offsetY;
-                    int x2 = x + offsetX;
-                    
-                    y2 = y2 < 0? 0 : (y2 > height-1? height-1:y2);
-                    x2 = x2 < 0? 0 : (x2 > width-1? width-1:x2);
-                    if (img[x2 + width*y2] >= centerValue)
-                        censusCode += 1;
-                    censusCode = censusCode << 1;
-                }
-            }
-            cen[x + y*width] = censusCode;
-        }
-    }
-}
 
 //perform a single step to calculate path cost for current pixel position
 inline void sgm_step(PathCost* L, //current path cost
     PathCost* Lpre, //previous path cost
-    PathCost* C, //cost map
+    CostType* C, //cost map
     double dx, double dy, int searchWinX, int searchWinY, 
     int P1, int P2)
 {
@@ -99,18 +69,18 @@ inline void sgm_step(PathCost* L, //current path cost
                     if(tx >= 0 && tx < searchWinX && ty >= 0 && ty < searchWinY)
                     {
                         int dtemp = tx * searchWinY + ty;
-                        min2 = min(min2, Lpre[dtemp] + P1);
+						min2 = std::min<PathCost>(min2, Lpre[dtemp] + P1);
                     }
                 }
             }
 
-            bestCost = min(bestCost, min1);
-            bestCost = min(bestCost, min2);
+			bestCost = std::min<PathCost>(bestCost, min1);
+			bestCost = std::min<PathCost>(bestCost, min2);
 
             int d = sx * searchWinY + sy;
             mxAssert(C[d] + bestCost >= LpreMin, "bestCost Must > LpreMin\n");
             L[d] = (C[d] + bestCost) - LpreMin;
-            minPathCost = min(L[d], minPathCost);
+            minPathCost = std::min<PathCost>(L[d], minPathCost);
         }
     }
 
@@ -409,8 +379,8 @@ void calc_cost(unsigned char* C,
     const double* preMv, int mvWidth, int mvHeight, 
     int winRadiusAgg, int winRadiusX, int winRadiusY)
 {
-    double* pMvx = preMv;
-    double* pMvy = preMv + mvWidth*mvHeight;
+    const double* pMvx = preMv;
+    const double* pMvy = preMv + mvWidth*mvHeight;
     int winPixels = (2 * winRadiusAgg + 1)*(2 * winRadiusAgg + 1);
     const CostType defaultCost = 5;
     int dMax = (2 * winRadiusX + 1) * (2 * winRadiusY + 1);

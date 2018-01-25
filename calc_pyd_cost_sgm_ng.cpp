@@ -1,8 +1,11 @@
 #include "mex.h"
+#include "common.h"
 #include <nmmintrin.h>
+#include <algorithm>
+
 /*
- * calc_cost_pyd_sgm.c 
- * Perfrom cost volume construct and sgm for pyramidal sgm OF method. 
+ * calc_cost_pyd_sgm_ng.cpp 
+ * Perform neighbor guided cost volume construct and sgm for pyramidal sgm OF method. 
  * 
  * Description: 
  * Construct a cost volume for image 1/image 2 with fixed search region. (search center could be initialized by a given 
@@ -22,16 +25,9 @@
  * subPixelRefine: enable sub-pixel position calculation. if set mvSub contains the subpixel location of current level.  
  *
  * Output:
- * C: generated Cost volume
- * minIdx: output index (disparity) by sgm
- * minC: the corresponding sum of the path cost w.r.t. minIdx
- * mvSub: subpixel localtion
+ * minC: the corresponding sum of the path cost w.r.t. mv
+ * flow: flow result, stored in a [width, height, 2] matrix
 */
-typedef unsigned char PathCost;
-typedef unsigned char PixelType;
-typedef unsigned char CostType;
-
-#define MAX_PATH_COST 255
 
 typedef struct _costEntry
 {
@@ -39,32 +35,6 @@ typedef struct _costEntry
 	int mvy;
 	int cost;
 } CostEntry;
-
-void census(PixelType* img, unsigned * cen, int width, int height, int halfWin)
-{
-    
-    
-    for (int y = 0; y< height; y++) {
-        for(int x= 0; x< width; x++) {
-            
-            unsigned censusCode = 0;
-            unsigned char centerValue = img[x +  width*y];
-            for (int offsetY = -halfWin; offsetY <= halfWin; ++offsetY) {
-                for (int offsetX = -halfWin; offsetX <= halfWin; ++offsetX) {
-                    int y2 = y + offsetY;
-                    int x2 = x + offsetX;
-                    
-                    y2 = y2 < 0? 0 : (y2 > height-1? height-1:y2);
-                    x2 = x2 < 0? 0 : (x2 > width-1? width-1:x2);
-                    if (img[x2 + width*y2] >= centerValue)
-                        censusCode += 1;
-                    censusCode = censusCode << 1;
-                }
-            }
-            cen[x + y*width] = censusCode;
-        }
-    }
-}
 
 inline void sgm_step(CostEntry* L, //current path cost
 					 CostEntry* Lpre, //previous path cost
@@ -92,16 +62,16 @@ inline void sgm_step(CostEntry* L, //current path cost
 			if(mvx == mvxPre && mvy == mvyPre) // ||d-d'|| = 0
 				min1 = Lpre[d2].cost;
 			else if(abs(mvx - mvxPre) <= 2 && abs(mvy - mvyPre) <= 2) {// ||d-d'|| < r
-				min2 = min(min2, Lpre[d2].cost + P1);
+				min2 = std::min<PathCost>(min2, Lpre[d2].cost + P1);
 			} 
 		}
 
-		bestCost = min(bestCost, min1);
-		bestCost = min(bestCost, min2);
+		bestCost = std::min<PathCost>(bestCost, min1);
+		bestCost = std::min<PathCost>(bestCost, min2);
 		L[d].cost = (C[d].cost + bestCost) - LpreMin;
 		L[d].mvx = mvx;
 		L[d].mvy = mvy;
-		minPathCost = min(L[d].cost, minPathCost);
+		minPathCost = std::min<PathCost>(L[d].cost, minPathCost);
 	}
 
 	L[dMax].cost = minPathCost; //set minimum value of current path cost
@@ -130,7 +100,7 @@ inline int adaptive_P2(int P2, int pixCur, int pixPre) {
   
 void sgm2d(unsigned* minC, double* mvSub, 
         PixelType* I1, CostEntry* C, int width, int height, int dMax,
-        int P1, int P2, int subpixelRefine )
+        int P1, int P2 )
 {
     //allocate path cost buffers. dMax cost entries + 1 minimun cost entry
     CostEntry* L1 = (CostEntry*) mxMalloc (sizeof(CostEntry) * 2 * (dMax + 1));            //Left -> Right direction
@@ -315,12 +285,10 @@ void sgm2d(unsigned* minC, double* mvSub,
             CostEntry* ptrC = C + width* dMax*y + dMax*x;
             unsigned minCost = SpPtr[x*dMax];
             unsigned minIdx = 0;
+
             for (int d = 1; d<dMax; d++) {
-                
                 if(SpPtr[x*dMax + d] < minCost) {
                     minCost = SpPtr[x*dMax + d] ;
-				//if(ptrC[d].cost < minCost) {
-				//	minCost = ptrC[d].cost;
                     minIdx = d;
                 }
             }
@@ -330,12 +298,73 @@ void sgm2d(unsigned* minC, double* mvSub,
         }
     }
 		
-
     mxFree(L1);
     mxFree(L2);
     mxFree(L3);
     mxFree(L4);
     mxFree(Sp);
+}
+
+void subpixel_refine(double* flow, unsigned* cen1, unsigned* cen2, int width, int height) 
+{
+    /*
+     * do subpixel quadratic interpolation:
+     *then find minimum of the parabola
+     */
+	double* flowX = flow;
+	double* flowY = flow + width*height;
+
+    for(int y = 0; y< height; y++) {
+        for (int x = 0; x <width; x++) {
+
+			unsigned cenCode1 = cen1[y*width + x];
+
+			double mvx = flowX[y*width + x];
+			double mvy = flowY[y*width + x];
+
+			int tx = mvx + x;
+			int ty = mvy + y;
+
+			if(tx > 1 && tx <width-1 && ty >1 && ty <height-1) {
+				unsigned cenCode2 = cen2[ty*width + tx];
+				double c0 = _mm_popcnt_u32((cenCode1^cenCode2));
+
+				cenCode2 = cen2[ty*width + tx - 1];
+				double cLeft = _mm_popcnt_u32((cenCode1^cenCode2));
+				cenCode2 = cen2[ty*width + tx + 1];
+				double cRight = _mm_popcnt_u32((cenCode1^cenCode2));
+
+				if(c0 >= cLeft || c0 >= cRight)
+					continue;
+
+				double subMvx = 0;
+				if (cRight < cLeft)
+					subMvx = (cRight-cLeft)/(c0 - cLeft)/2.0;
+				else
+					subMvx = (cRight-cLeft)/(c0 - cRight)/2.0;
+
+				flowX[y*width + x] += subMvx;
+
+
+				cenCode2 = cen2[(ty-1)*width + tx];
+				cLeft = _mm_popcnt_u32((cenCode1^cenCode2));
+				cenCode2 = cen2[(ty+1)*width + tx];
+			    cRight = _mm_popcnt_u32((cenCode1^cenCode2));
+
+				if(c0 >= cLeft || c0 >= cRight)
+					continue;
+
+				double subMvy = 0;
+				if (cRight < cLeft)
+					subMvy = (cRight-cLeft)/(c0 - cLeft)/2.0;
+				else
+					subMvy = (cRight-cLeft)/(c0 - cRight)/2.0;
+
+				flowY[y*width + x] += subMvy;
+
+			}
+		}
+	}
 }
         
 void calc_cost(CostEntry* C,
@@ -344,8 +373,8 @@ void calc_cost(CostEntry* C,
 	int winRadiusAgg, int winRadiusX, int winRadiusY, 
 	int hintXradius,  int hintYradius, int dMax)
 {
-	double* pMvx = preMv;
-	double* pMvy = preMv + mvWidth*mvHeight;
+	const double* pMvx = preMv;
+	const double* pMvy = preMv + mvWidth*mvHeight;
 	int winPixels = (2 * winRadiusAgg + 1)*(2 * winRadiusAgg + 1);
 	const CostType defaultCost = 5;
 
@@ -360,8 +389,8 @@ void calc_cost(CostEntry* C,
 
 			for (int dy = -step*hintYradius; dy <= step*hintYradius; dy += step) {
 				for (int dx = -step*hintXradius; dx <= step*hintXradius; dx += step) {
-					int yn = min(mvHeight-1, max(0, y + dy));
-					int xn = min(mvWidth-1,  max(0, x + dx));
+					int yn = clamp(y+dy, 0, mvHeight-1);
+					int xn = clamp(x+dx, 0, mvWidth-1);
 
 					double mvx = pMvx[mvWidth*yn + xn];
 					double mvy = pMvy[mvWidth*yn + xn];
@@ -481,7 +510,11 @@ void mexFunction(int nlhs, mxArray *plhs[],
 	//perform sgm
 	sgm2d(minC, flowResult, 
 		I1, C2, width, height, dMax, 
-		P1, P2, subPixelRefine);
+		P1, P2);
+
+
+	if(subPixelRefine)
+		subpixel_refine(flowResult, cen1, cen2, width, height);
 
 	mxFree(C2);
     mxFree(cen1);
