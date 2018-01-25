@@ -6,14 +6,12 @@
  * Perform cost volume construct and SGM for epipolar sgm OF method. 
  * 
  * Description: 
- * Construct a cost volume for image 1/image 2 with fixed search region. (search center could be initialized by a given 
- * mv map, and then perform sgm on the generated Cost volume
- * the output of this program is a 2D index map, each element is the corresponding best cost index for each pixel 
+ * Construct a cost volume for image 1/image 2 along epipolar line. 
  * 
  *
  * The calling syntax is:
  *
- *      [C, minIdx, minC, mvSub] = calc_cost_sgm(I1, I2, preMv, halfSearchWinSize, aggSize, subPixelRefine)
+ *      [bestD, minC] = calc_cost_sgm(I1, I2, dMax, vMax, pixelPosD0, normlizeDirection, offsetFromPosD0)
  *     
  * Input:
  * I1/I2 are input images
@@ -41,8 +39,6 @@ inline void sgm_step(PathCost* L, //current path cost
     PathCost minPathCost = MAX_PATH_COST;
     PathCost LpreMin = Lpre[dMax]; //get minimum value of pre path cost
     for (int d = 0; d < dMax; d ++) {
-
-        //mxAssert((int)LpreMin + P2 < 256);
 		// d= d'
         PathCost min1 = Lpre[d];
 
@@ -56,13 +52,13 @@ inline void sgm_step(PathCost* L, //current path cost
         PathCost bestCost = min3;
 
 
-        bestCost = min(bestCost, min1);
-        bestCost = min(bestCost, min2);
+        bestCost = std::min<PathCost>(bestCost, min1);
+        bestCost = std::min<PathCost>(bestCost, min2);
 
         mxAssert(C[d] + bestCost >= LpreMin, "bestCost Must > LpreMin\n");
 
         L[d] = (C[d] + bestCost) - LpreMin;
-        minPathCost = min(L[d], minPathCost);
+        minPathCost = std::min<PathCost>(L[d], minPathCost);
         
     }
 
@@ -79,22 +75,17 @@ inline int adaptive_P2(int P2, int pixCur, int pixPre) {
  * Output:
  * bestD is the output best index along the third dimension
  * minC is the corresponding cost along with best index
- * mvSub is the output subpixel position for mvx/mvy
  *
  * Input:
  * C: 3-d cost volume
  * width/height/dMax: width/height/dMax(third dimension) of C
- * mvPre: previous level's the mv map
- * mvWidth/mvHeight: width/height of mvPre
- * searchWinX: search window size at x-direction
- * searchWinY: search window size at y-direction
  * P1/P2: small/large penalty
  * subpixelRefine: enable/disable subpixel position estimation
  *
  */
-void sgm2d(unsigned* bestD, unsigned* minC,
+void sgm(unsigned* bestD, unsigned* minC,
         PixelType* I1, CostType* C, int width, int height, int dMax,
-        int P1, int P2, int subpixelRefine )
+        int P1, int P2, bool subpixelRefine)
 {
     //allocate path cost buffers. dMax cost entries + 1 minimun cost entry
     PathCost* L1 = (PathCost*) mxMalloc (sizeof(PathCost) * 2 * (dMax + 1));            //Left -> Right direction
@@ -164,7 +155,7 @@ void sgm2d(unsigned* bestD, unsigned* minC,
 
                     if (enableDiagnalPath) {
                         memcpy(ptrL2Cur, ptrCCur, sizeof(PathCost)*dMax);
-                        ptrL2Cur[dMax] = MAX_PATH_COST;
+                        ptrL2Cur[dMax] = 0;
                     }
                 }
 
@@ -268,15 +259,15 @@ void sgm2d(unsigned* bestD, unsigned* minC,
     }
     
     for(int y = 0; y< height; y++) {
-        unsigned* SpPtr = Sp + y*costPerRowEntry;
+        unsigned* ptrSp = Sp + y*costPerRowEntry;
         for (int x = 0; x <width; x++) {
             
-            unsigned minCost = SpPtr[x*dMax];
+            unsigned minCost = ptrSp[x*dMax];
             unsigned minIdx = 0;
             for (int d = 1; d<dMax; d++) {
                 
-                if(SpPtr[x*dMax + d] < minCost) {
-                    minCost = SpPtr[x*dMax + d];
+                if(ptrSp[x*dMax + d] < minCost) {
+                    minCost = ptrSp[x*dMax + d];
                     minIdx = d;
                 }
             }
@@ -285,18 +276,19 @@ void sgm2d(unsigned* bestD, unsigned* minC,
         }
     }
     
+	
     if(subpixelRefine) {
-        /*
-         * do subpixel quadratic interpolation:
-         *fit parabola into (x1=d-1, y1=C[d-1]), (x2=d, y2=C[d]), (x3=d+1, y3=C[d+1])
-         *then find minimum of the parabola
-         */
+        
+        //do subpixel quadratic interpolation:
+        //fit parabola into (x1=d-1, y1=C[d-1]), (x2=d, y2=C[d]), (x3=d+1, y3=C[d+1])
+        //then find minimum of the parabola
+         
         for(int y = 0; y< height; y++) {
-            unsigned* SpPtr = Sp + y*costPerRowEntry;
+            unsigned* ptrSp = Sp + y*costPerRowEntry;
             
             for (int x = 0; x <width; x++) {
 
-				unsigned* ptrSpCur = SpPtr + dMax*x;
+				unsigned* ptrSpCur = ptrSp + dMax*x;
                 unsigned bestIdx = bestD[y*width + x];
                 
 
@@ -313,10 +305,8 @@ void sgm2d(unsigned* bestD, unsigned* minC,
 					bestD[y*width + x] = bestSubIdx * (1<<SUBPIXEL_PRECISION);
 				}
             }
-        }
-        
-    }
-       
+        }  
+    }      
        
     mxFree(L1);
     mxFree(L2);
@@ -324,8 +314,9 @@ void sgm2d(unsigned* bestD, unsigned* minC,
     mxFree(L4);
     mxFree(Sp);
 }
-        
-void calc_cost(unsigned char* C, 
+
+
+void calc_cost(CostType* C, 
 			 PixelType* I1, PixelType* I2, int width, int height,
 			int dMax, double vMax, double* pixelPosD0, double* normlizeDirection, double* offsetFromPosD0)
 {
@@ -337,52 +328,82 @@ void calc_cost(unsigned char* C,
 	census(I1, cen1, width, height, cenWinRadius);
 	census(I2, cen2, width, height, cenWinRadius);
 
-    int winPixels = (2 * aggWinRadius + 1)*(2 * aggWinRadius + 1);
+    const int winPixels = (2 * aggWinRadius + 1)*(2 * aggWinRadius + 1);
 
 	double* normlizeDirectionX = normlizeDirection;
 	double* normlizeDirectionY = normlizeDirection + width*height;
 
-	double* offsetFromPosD0X = offsetFromPosD0;
-	double* offsetFromPosD0Y = offsetFromPosD0 + width*height;
+	double* refPixelPosD0X = pixelPosD0;
+	double* refPixelPosD0Y = pixelPosD0 + width*height;
 
-	double* pixelPosD0X = pixelPosD0;
-	double* pixelPosD0Y = pixelPosD0 + width*height;
+	const double n = dMax + 1;
+
+	CostType* Ctmp = (CostType*)mxMalloc(width * height * dMax * sizeof(CostType));
 
     for (int y = 0; y< height; y++) {
         for (int x = 0; x< width; x++) {
-            CostType* ptrC = C + y*dMax*width + dMax*x;
+            CostType* ptrC = Ctmp + y*dMax*width + dMax*x;
 
-			double refPosD0X = pixelPosD0X[y*width + x];
-			double refPosD0Y = pixelPosD0Y[y*width + x];
+			//the starting searching position in reference image
+			double refPosD0X = refPixelPosD0X[y*width + x] - 1; //due to the 1-indexing of matlab
+			double refPosD0Y = refPixelPosD0Y[y*width + x] - 1;
             
-            int d = 0;
+			//unit direction vector
+			double ux = normlizeDirectionX[y*width + x];
+			double uy = normlizeDirectionY[y*width + x];
 
-			/*
-			%get 2D offset of disparity from 0 to maximun   
-				offset = vzInd.*O(j, i).*repmat(dnorm, 1, dMax+1);
-			pt = pd0 + offset;
-			pt = round(pt);
+			unsigned cenCode1 = cen1[y*width + x];
+			double offset = offsetFromPosD0[y*width + x];
 
-			pt(1,:) = min(cols, max(1, pt(1,:)));
-			pt(2,:) = min(rows, max(1, pt(2,:)));
-			ind2 = sub2ind([rows, cols], pt(2,:), pt(1,:));
+			for (int d = 0; d < dMax; d++) {
+				double vzRatio = 1.0 * d / n * vMax;
+				double vzInd = vzRatio / (1 - vzRatio);
 
-			cenCur = cen1Flat(:, ind);
-			cenRef = cen2Flat(:, ind2);
+				//offset from starting searching position
+				double offsetX = offset * vzInd * ux;
+				double offsetY = offset * vzInd * uy;
 
-			diff = cenCur ~= cenRef;
+				int x2 = round(refPosD0X + offsetX);
+				int y2 = round(refPosD0Y + offsetY);
 
-			cost = sum(diff);
-			CFlat(:, ind) = cost'; 
-            */
+				x2 = clamp(x2, 0, width - 1);
+				y2 = clamp(y2, 0, height - 1);
 
-
+				unsigned cenCode2 = cen2[y2*width + x2];
+				ptrC[d] = _mm_popcnt_u32(cenCode1 ^ cenCode2);
+			}
         }
     }
 
+	//box filtering
+	
+	const int aggHalfWinSize = 2;
 
+	for (int y = 0; y < height; y++) {
+		for (int x = 0; x < width; x++) {
+			CostType* ptrC = C + y*dMax*width + dMax*x;
+
+			for (int d = 0; d < dMax; d++) {
+
+				unsigned costSum = 0;
+
+				for (int dy = -aggHalfWinSize; dy <= aggHalfWinSize; dy++) {
+					for (int dx = -aggHalfWinSize; dx <= aggHalfWinSize; dx++) {
+						int x1 = clamp(x + dx, 0, width - 1);
+						int y1 = clamp(y + dy, 0, height - 1);
+
+						costSum += Ctmp[y1*dMax*width + dMax*x1 + d];
+					}
+				}
+
+				ptrC[d] = 1.0 * costSum / winPixels + 0.5;
+			}
+		}
+	}
+	
 	mxFree(cen1);
 	mxFree(cen2);
+	mxFree(Ctmp);
 }
 /* The gateway function */
 void mexFunction(int nlhs, mxArray *plhs[],
@@ -403,31 +424,33 @@ void mexFunction(int nlhs, mxArray *plhs[],
 	double* normlizeDirection = mxGetPr(prhs[5]);
 	double* offsetFromPosD0 = mxGetPr(prhs[6]);
 
-	int P1 = 6;//mxGetScalar(prhs[8]);
-	int P2 = 64;//mxGetScalar(prhs[9]);
+	int P1 = mxGetScalar(prhs[7]);
+	int P2 = mxGetScalar(prhs[8]);
+
+	const bool subPixelRefine = true;
 
     width = mxGetM(prhs[0]);
     height = mxGetN(prhs[0]);
     
     /* create the output matrix */
-    const mwSize dims2[] = { width, height };       //output: best index map
-    const mwSize dims3[] = { width, height };    //output: cost corresponds to best Index map
+    const mwSize dims[] = { width, height };      //output: best disparity map, reversed 8bits subpixel precision
+    const mwSize dims2[] = { width, height };     //output: cost corresponds to best Index map
 
-    plhs[0] = mxCreateNumericArray(2, dims2, mxUINT32_CLASS, mxREAL);
+    plhs[0] = mxCreateNumericArray(2, dims, mxUINT32_CLASS, mxREAL);
     plhs[1] = mxCreateNumericArray(2, dims2, mxUINT32_CLASS, mxREAL);
 
     unsigned * bestD = (unsigned*) mxGetData(plhs[0]);
     unsigned* minC = (unsigned*)mxGetData(plhs[1]);
 
 	//allocate temporal buffers
-	CostType* C = mxMalloc(width * height * dMax* sizeof(CostType));
+	CostType* C = (CostType*)mxMalloc(width * height * dMax* sizeof(CostType));
     //construct cost volume
     calc_cost(C, I1, I2, width, height, dMax, vMax, pixelPosD0, normlizeDirection, offsetFromPosD0);
 
     //perform sgm
-    sgm2d(bestD, minC,
+    sgm(bestD, minC,
         I1, C, width, height, dMax, 
-        P1,  P2);
+        P1,  P2, subPixelRefine);
 
     mxFree(C);
 }
