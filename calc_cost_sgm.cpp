@@ -11,20 +11,17 @@
  *
  * The calling syntax is:
  *
- *      [bestD, minC] = calc_cost_sgm(I1, I2, dMax, vMax, pixelPosD0, normlizeDirection, offsetFromPosD0)
+ *      [bestD, minC] = calc_cost_sgm(I1, I2, dMax, vMax, pixelPosD0, normlizeDirection, offsetFromPosD0, P1, P2)
  *     
  * Input:
  * I1/I2 are input images
- * preMv is mv map from previous pyramidal level, must be have same or large size with I1/I2
- * halfSearchWinSize is the half search windows size in vertical direction. it is doubled in horizontal direction
- * aggSize is the aggregation window size. typically 5x5 is good
- * subPixelRefine: enable sub-pixel position calculation. if set mvSub contains the subpixel location of current level.  
+ * dMax: maximum disparity
+ * vMax: vMax value described in 
+ *
  *
  * Output:
- * C: generated Cost volume
- * minIdx: output index (disparity) by sgm
- * minC: the corresponding sum of the path cost w.r.t. minIdx
- * mvSub: subpixel localtion
+ * bestD: best disparity, with 8bit subpixel precision
+ * minC:  minmimun cost corresponds to bestD
 */
 
     
@@ -66,9 +63,9 @@ inline void sgm_step(PathCost* L, //current path cost
 }
 
 inline int adaptive_P2(int P2, int pixCur, int pixPre) {
-    const int threshold = 50;
+    const int threshold = 25;
     
-    return (abs(pixCur - pixPre) > threshold ? P2 / 8 : P2);
+    return (abs(pixCur - pixPre) > threshold ? P2/8 : P2);
 }
 
 /* sgm on 3-D cost volume
@@ -301,13 +298,15 @@ void sgm(unsigned* bestD, unsigned* minC,
 						bestSubIdx = bestSubIdx + (c1-c_1)/(c - c_1)/2.0;
 					else
 						bestSubIdx = bestSubIdx + (c1-c_1)/(c - c1)/2.0;
-					
+
 					bestD[y*width + x] = bestSubIdx * (1<<SUBPIXEL_PRECISION);
-				}
-            }
-        }  
-    }      
-       
+				} else 
+					bestD[y*width + x] = bestIdx * (1<<SUBPIXEL_PRECISION);
+			 } 
+        }
+    }
+   
+                
     mxFree(L1);
     mxFree(L2);
     mxFree(L3);
@@ -433,7 +432,7 @@ void mexFunction(int nlhs, mxArray *plhs[],
     height = mxGetN(prhs[0]);
     
     /* create the output matrix */
-    const mwSize dims[] = { width, height };      //output: best disparity map, reversed 8bits subpixel precision
+    const mwSize dims[] = { width, height };      //output: best disparity map, reserved 8bits subpixel precision
     const mwSize dims2[] = { width, height };     //output: cost corresponds to best Index map
 
     plhs[0] = mxCreateNumericArray(2, dims, mxUINT32_CLASS, mxREAL);
