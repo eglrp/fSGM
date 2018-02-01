@@ -2,7 +2,7 @@
 #include "common.h"
 #include <nmmintrin.h>
 #include <algorithm>
-
+const int M = 1;  //random hints per 
 const int N = 2;
 const int DX = 1;
 const int DY = 1;
@@ -132,16 +132,30 @@ void calc_cost_based_on_hint(CostEntry* ptrCCur, int x, int y,
     ptrL[3] = ptrL4Hint;
 
     int cand = 0;
+	const int aggPixels = (2 * aggHalfWin + 1)*(2 * aggHalfWin + 1);
     for (int l = 0; l < DIRECTION_NUM; l++) {
-        for (int i = 0; i < N; i++) {
-            int mvx = ptrL[l][i].mvx;
-            int mvy = ptrL[l][i].mvy;
+        for (int i = 0; i < N + M; i++) {
+
+			int mvx;
+			int mvy; 
+
+			if (i < N) {
+				mvx = ptrL[l][i].mvx;
+				mvy = ptrL[l][i].mvy;
+			}
+			else
+			{
+				mvx = rand() % 256 - 128;
+				mvy = rand() % 128 - 64;
+				//mexPrintf("mvx %d, mvy %d\n", mvx, mvy);
+			}
 
             for (int offy = -DY; offy <= DY; offy++) {
                 for (int offx = -DX; offx <= DX; offx++) {
 
                     unsigned costSum = 0;
 
+					
                     for (int aggy = -aggHalfWin; aggy <= aggHalfWin; aggy++) {
                         for (int aggx = -aggHalfWin; aggx <= aggHalfWin; aggx++) {
 
@@ -160,7 +174,7 @@ void calc_cost_based_on_hint(CostEntry* ptrCCur, int x, int y,
                         }
                     }
 
-                    ptrCCur[cand].cost = costSum / 25.0 + 0.5;
+                    ptrCCur[cand].cost = 1.0* costSum / aggPixels + 0.5;
                     ptrCCur[cand].mvx = mvx + offx;
                     ptrCCur[cand].mvy = mvy + offy;
 
@@ -177,7 +191,7 @@ void sgm2d(unsigned* minC, double* mvSub,
 {
     //allocate path cost buffers. dMax cost entries + 1 minimun cost entry
 
-    int dMax = DIRECTION_NUM * N * MV_PER_HINT;
+    int dMax = DIRECTION_NUM * (N + M) * MV_PER_HINT;
 	mexPrintf("dMax : %d\n", dMax);
 	int entriesPerPixel = dMax + N; //+N for storing the best N cadidates (cost + mv)
     CostEntry* L1 = (CostEntry*) mxMalloc (sizeof(CostEntry) * 2 * entriesPerPixel);				//Left -> Right direction
