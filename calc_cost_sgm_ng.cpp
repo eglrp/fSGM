@@ -3,6 +3,13 @@
 #include <nmmintrin.h>
 #include <algorithm>
 
+const int N = 2;
+const int DX = 1;
+const int DY = 1;
+const int MV_PER_HINT = (2 * DX + 1)*(2 * DY + 1);
+const int DIRECTION_NUM = 4;
+const int aggHalfWin = 2;
+
 /*
  * calc_cost_pyd_sgm_ng.cpp 
  * Perform neighbor guided cost volume construct and sgm for pyramidal sgm OF method. 
@@ -42,10 +49,10 @@ inline void sgm_step(CostEntry* L, //current path cost
 					 int dMax, 
 					 int P1, int P2)
 {
-    const int N = 2;
-	PathCost minPathCost = MAX_PATH_COST;
+
 	PathCost LpreMin = Lpre[dMax].cost; //get minimum value of pre path cost
-    L[dMax].cost = L[dMax + 1].cost = MAX_PATH_COST;
+	for (int i = 0; i < N; i++)
+		L[dMax + i].cost = MAX_PATH_COST;
 
 	for (int d = 0; d< dMax; d++) {
 		int mvx = C[d].mvx;
@@ -74,15 +81,19 @@ inline void sgm_step(CostEntry* L, //current path cost
 		L[d].mvx = mvx;
 		L[d].mvy = mvy;
 
-        if (L[d].cost < L[dMax].cost) {
-            L[dMax + 1] = L[dMax];
-            L[dMax] = L[d];
-        }
-        else if (L[d].cost < L[dMax+1].cost) {
-            L[dMax + 1] = L[d];
-        }
+		//update top-N;
+		int j;
+		for (j = 0; j < N; j++) {
+			if (L[d].cost < L[dMax + j].cost)
+				break;
+		}
 
-		minPathCost = std::min<PathCost>(L[d].cost, minPathCost);
+		if (j < N) {
+			for (int i = N - 1; i > j; i--) {
+				L[dMax + i] = L[dMax + i - 1];
+			}
+			L[dMax + j] = L[d];
+		}
 	}
 }
 
@@ -110,28 +121,26 @@ inline int adaptive_P2(int P2, int pixCur, int pixPre) {
 
 void calc_cost_based_on_hint(CostEntry* ptrCCur, int x, int y, 
     unsigned* cen1, unsigned* cen2, int width, int height, 
-    CostEntry* ptrL1Cur, CostEntry* ptrL2Cur, CostEntry* ptrL3Cur, CostEntry* ptrL4Cur, int dMax)
+    CostEntry* ptrL1Hint, CostEntry* ptrL2Hint, CostEntry* ptrL3Hint, CostEntry* ptrL4Hint)
 {
-    const int N = 2;
-    const int aggHalfWin = 2;
 
-    CostEntry* ptrL[4];
-    ptrL[0] = ptrL1Cur;
-    ptrL[1] = ptrL2Cur;
-    ptrL[2] = ptrL3Cur;
-    ptrL[3] = ptrL4Cur;
+
+    CostEntry* ptrL[DIRECTION_NUM];
+    ptrL[0] = ptrL1Hint;
+    ptrL[1] = ptrL2Hint;
+    ptrL[2] = ptrL3Hint;
+    ptrL[3] = ptrL4Hint;
 
     int cand = 0;
-    for (int l = 0; l < 4; l++) {
+    for (int l = 0; l < DIRECTION_NUM; l++) {
         for (int i = 0; i < N; i++) {
-            int mvx = ptrL[l][dMax + i].mvx;
-            int mvy = ptrL[l][dMax + i].mvy;
+            int mvx = ptrL[l][i].mvx;
+            int mvy = ptrL[l][i].mvy;
 
-            for (int offy = -1; offy <= 1; offy++) {
-                for (int offx = -1; offx <= 1; offx++) {
+            for (int offy = -DY; offy <= DY; offy++) {
+                for (int offx = -DX; offx <= DX; offx++) {
 
                     unsigned costSum = 0;
-                    ///const CostType defaultCost = 5;
 
                     for (int aggy = -aggHalfWin; aggy <= aggHalfWin; aggy++) {
                         for (int aggx = -aggHalfWin; aggx <= aggHalfWin; aggx++) {
@@ -139,20 +148,10 @@ void calc_cost_based_on_hint(CostEntry* ptrCCur, int x, int y,
                             int y1 = clamp(y + aggy, 0, height - 1);
                             int x1 = clamp(x + aggx, 0, width - 1);
 
-                            //if (y1 < 0 || y1 > height - 1 || x1 <0 || x1 > width - 1) {
-                            //    costSum += defaultCost;  //add constant cost if not valid current pixel position
-                            //    continue;
-                            //}
-
                             unsigned cenCode1 = cen1[width*y1 + x1];
 
                             int y2 = clamp((offy + y1) + mvy, 0, height - 1);
                             int x2 = clamp((offx + x1) + mvx, 0, width - 1);
-
-                            //if (y2 < 0 || y2 > height - 1 || x2 <0 || x2 > width - 1) {
-                            //    costSum += defaultCost; //add constant cost if not valid reference pixel position
-                            //    continue;
-                            //}
 
                             unsigned cenCode2 = cen2[width*y2 + x2];
 
@@ -177,29 +176,27 @@ void sgm2d(unsigned* minC, double* mvSub,
         int P1, int P2 )
 {
     //allocate path cost buffers. dMax cost entries + 1 minimun cost entry
-    const int N = 2; //number of best vectors. 
-    const int mvPerHint = 9;
-    const int directions = 4;
-    int dMax = directions * N * mvPerHint;
 
-    CostEntry* L1 = (CostEntry*) mxMalloc (sizeof(CostEntry) * 2 * (dMax + N));            //Left -> Right direction
-    CostEntry* L2 = (CostEntry*) mxMalloc (sizeof(CostEntry) * 2 * width * (dMax + N));  //top-left -> bottom right direction
-    CostEntry* L3 = (CostEntry*) mxMalloc (sizeof(CostEntry) * 2 * width * (dMax + N));    //up -> bottom direction
-    CostEntry* L4 = (CostEntry*) mxMalloc (sizeof(CostEntry) * 2 * width * (dMax + N));  //top-right->bottom left direction
+    int dMax = DIRECTION_NUM * N * MV_PER_HINT;
+	mexPrintf("dMax : %d\n", dMax);
+	int entriesPerPixel = dMax + N; //+N for storing the best N cadidates (cost + mv)
+    CostEntry* L1 = (CostEntry*) mxMalloc (sizeof(CostEntry) * 2 * entriesPerPixel);				//Left -> Right direction
+    CostEntry* L2 = (CostEntry*) mxMalloc (sizeof(CostEntry) * 2 * width * entriesPerPixel);		//top-left -> bottom right direction
+    CostEntry* L3 = (CostEntry*) mxMalloc (sizeof(CostEntry) * 2 * width * entriesPerPixel);		//up -> bottom direction
+    CostEntry* L4 = (CostEntry*) mxMalloc (sizeof(CostEntry) * 2 * width * entriesPerPixel);		//top-right->bottom left direction
     CostEntry* C = (CostEntry*)mxMalloc(width * height * sizeof(CostEntry) * dMax);
+	unsigned * Sp = (unsigned *)mxMalloc(sizeof(unsigned) * width * height * dMax); //sum of path cost from all DIRECTION_NUM
 
-    memset(L1, 0, sizeof(CostEntry) * 2 * (dMax + N));
-    memset(L2, 0, sizeof(CostEntry) * 2 * width * (dMax + N));
-    memset(L3, 0, sizeof(CostEntry) * 2 * width * (dMax + N));
-    memset(L4, 0, sizeof(CostEntry) * 2 * width * (dMax + N));
-
-    unsigned * Sp = (unsigned *) mxMalloc (sizeof(unsigned ) * width * height * dMax); //sum of path cost from all directions
-    memset(Sp, 0, sizeof(unsigned)*width*height*dMax);
+    memset(L1, 0, sizeof(CostEntry) * 2 * entriesPerPixel);
+    memset(L2, 0, sizeof(CostEntry) * 2 * width * entriesPerPixel);
+    memset(L3, 0, sizeof(CostEntry) * 2 * width * entriesPerPixel);
+    memset(L4, 0, sizeof(CostEntry) * 2 * width * entriesPerPixel);
+	memset(Sp, 0, sizeof(unsigned)*width*height*dMax);
 
 	double* flowX = mvSub;
 	double* flowY = mvSub + width*height;
 
-    const int pathCostEntryPerPixel = (dMax + N); //dMax + N minimun
+    const int pathCostEntryPerPixel = entriesPerPixel; 
     const int pathCostEntryPerRow = width * pathCostEntryPerPixel;
     const int costPerRowEntry = width*dMax;
     
@@ -222,7 +219,6 @@ void sgm2d(unsigned* minC, double* mvSub,
     census(I1, cen1, width, height, cenHalfWin);
     census(I2, cen2, width, height, cenHalfWin);
 
-
     for (int pass = 0; pass < totalPass; pass++) {
         if (pass == 1) {
             ystart = height - 1;
@@ -235,7 +231,7 @@ void sgm2d(unsigned* minC, double* mvSub,
         }
 
         CostEntry* ptrL1Pre = L1;
-        CostEntry* ptrL1Cur = L1 + dMax + N;
+        CostEntry* ptrL1Cur = L1 + entriesPerPixel;
         CostEntry* ptrL3PreRow = L3;
         CostEntry* ptrL3CurRow = L3 + pathCostEntryPerRow;
         CostEntry* ptrL2PreRow = L2;
@@ -250,21 +246,21 @@ void sgm2d(unsigned* minC, double* mvSub,
 
             for (int x = xstart; x != xend; x += xstep) {
 
-                CostEntry* ptrL3Cur = ptrL3CurRow + x*(dMax + N);
-                CostEntry* ptrL3Pre = ptrL3PreRow + x*(dMax + N);
+                CostEntry* ptrL3Cur = ptrL3CurRow + x*entriesPerPixel;
+                CostEntry* ptrL3Pre = ptrL3PreRow + x*entriesPerPixel;
 
-                CostEntry* ptrL2Cur = ptrL2CurRow + x*(dMax + N);
-                CostEntry* ptrL2Pre = ptrL2PreRow + (x - xstep)*(dMax + N);
+                CostEntry* ptrL2Cur = ptrL2CurRow + x*entriesPerPixel;
+                CostEntry* ptrL2Pre = ptrL2PreRow + (x - xstep)*entriesPerPixel;
 
-                CostEntry* ptrL4Cur = ptrL4CurRow + x*(dMax + N);
-                CostEntry* ptrL4Pre = ptrL4PreRow + (x + xstep)*(dMax + N);
+                CostEntry* ptrL4Cur = ptrL4CurRow + x*entriesPerPixel;
+                CostEntry* ptrL4Pre = ptrL4PreRow + (x + xstep)*entriesPerPixel;
 
                 CostEntry* ptrCCur = ptrC + x*dMax;
 
 
                 //do searching here 
-                calc_cost_based_on_hint( ptrCCur, x, y, 
-                    cen1,cen2,  width,  height,  ptrL1Cur,  ptrL2Cur,  ptrL3Cur,  ptrL4Cur, dMax);
+				calc_cost_based_on_hint(ptrCCur, x, y,
+					cen1, cen2, width, height, ptrL1Cur + dMax, ptrL2Cur + dMax, ptrL3Cur + dMax, ptrL4Cur + dMax);
 
                 if (x == xstart) {
                     memcpy(ptrL1Cur, ptrCCur, sizeof(CostEntry)*dMax);
@@ -289,7 +285,7 @@ void sgm2d(unsigned* minC, double* mvSub,
                     }
                 }
 
-                if (x == xend) {
+                if (x == xend - xstep) {
                     if (enableDiagnalPath) {
                         memcpy(ptrL4Cur, ptrCCur, sizeof(CostEntry)*dMax);
                         ptrL4Cur[dMax].cost = 0;
@@ -331,7 +327,7 @@ void sgm2d(unsigned* minC, double* mvSub,
                             dMax, P1, adpativeP2 ? adaptive_P2(P2, pixCur, pixPre) : P2);
                     }
 
-                    if (x != xend && y != ystart) {
+                    if (x != xend - xstep && y != ystart) {
 
                         PixelType pixCur = I1[width*y + x];
                         PixelType pixPre = I1[width*(y - ystep) + x + xstep];
@@ -376,7 +372,6 @@ void sgm2d(unsigned* minC, double* mvSub,
         }
     }
     
-    //mexPrintf("path cost aggregate done!\n");
     for(int y = 0; y< height; y++) {
         unsigned* SpPtr = Sp + y*costPerRowEntry;
 		
@@ -475,12 +470,12 @@ void subpixel_refine(double* flow, unsigned* cen1, unsigned* cen2, int width, in
 void mexFunction(int nlhs, mxArray *plhs[],
                  int nrhs, const mxArray *prhs[])
 {
-    PixelType *I1;             /* pointer to Input image I1 */
-    PixelType *I2;             /* pointer to Input image I2 */
-    double *preMv;          /* pointer to initial search position */
+    PixelType *I1;					/* pointer to Input image I1 */
+    PixelType *I2;					/* pointer to Input image I2 */
+    double *preMv;					/* pointer to initial search position */
     
-    mwSize width;               /* rows (width) assume I1/I2 are permuted before passing in */
-    mwSize height;               /* cols (height)*/
+    mwSize width;					/* rows (width) assume I1/I2 are permuted before passing in */
+    mwSize height;					/* cols (height)*/
     
     I1 = (PixelType*)mxGetData(prhs[0]);
     I2 = (PixelType*)mxGetData(prhs[1]); 
