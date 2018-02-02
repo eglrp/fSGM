@@ -1,14 +1,21 @@
-function [F, E, H, epi, direction, Pd0, normlizeDirection, O,  Rflow, status] = epipolar_geometry(I1, I2, K)
+function [PrefD0, NormlizeDirection, Offset,  Rflow, status] = epipolar_geometry(I1, I2, K)
 %Calculate the epipolar geometry for two Camera views I1 and I2
 % output is Fundamental Matrix F and esstential Matrix E
 % epipole position in I2
 % direction
 %
-    debug = 0;
-    if(debug)
-        close all;
-    end
-
+% Inputs: First/Second image I1/I2, camera intrinsic matrix K
+%
+% Outputs: 
+% 
+%   denote p as current pixel position, p' is the starting search position in reference image, e' as the epipole in the reference image 
+%
+% PrefD0: starting search pixel position of pixel p in reference image (M x N x2)
+% normlizeDirection: unit direction vector of line e' -> p' (MxNx2)
+% Offset: offset of e'-> p' (MxN)
+% Rflow: rotation flow of p (MxNx2)
+% status: 0/1 success/fail
+% 
     assert(isequal(size(I1), size(I2)));
 
     if(size(I1, 3) > 1)
@@ -24,18 +31,12 @@ function [F, E, H, epi, direction, Pd0, normlizeDirection, O,  Rflow, status] = 
 %%% calculate the Fundamental matrix
     [F, matchedPoints1, matchedPoints2, inlierIndx, status] = estimate_fundamental_matrix(I1, I2);
     
-    %in case Fundamental matrix estimation fail, set all output to zero
+%in case Fundamental matrix estimation fail, set all output to zero
     if(status) 
-        F = 0; E = 0; H = 0; epi = 0; direction = 0; Pd0 = 0; normlizeDirection = 0;O = 0; Rflow = 0;
+        PrefD0 = 0; NormlizeDirection = 0;Offset = 0; Rflow = 0;
         return;
     end
     
-% fp = fopen('000000_10_fund.dat', 'rb');
-% 
-% F = fread(fp, 9, 'double');
-% F = reshape(F, [3, 3])';
-%fclose(fp);
-
 %%% compute epipole in I2 %%%
 % F'e' = 0, Fe = 0
 % e & e' are epipole in I1 & I2 
@@ -108,14 +109,14 @@ function [F, E, H, epi, direction, Pd0, normlizeDirection, O,  Rflow, status] = 
 
     Rflow = rotation_motion(H, F, rows, cols);
 
-    Pd0 = P + Rflow; % position with zero disparity
-    Direct = Pd0 - E2I;
+    PrefD0 = P + Rflow; % position with zero disparity
+    Direct = PrefD0 - E2I;
     if(direction)
         Direct = -Direct;
     end
 
-    O = sqrt(sum(Direct.^2, 3)); %Offset from Pd0 to epipole in I2
-    normlizeDirection = normlize(Direct); %normlized direction
+    Offset = sqrt(sum(Direct.^2, 3)); %Offset from Pd0 to epipole in I2
+    NormlizeDirection = normlize(Direct); %normlized direction
 end
 
 function dnorm = normlize(d)
@@ -127,7 +128,6 @@ function dnorm = normlize(d)
 end
 
 function [F, matchedPoints1, matchedPoints2, inlierIndx, status] = estimate_fundamental_matrix(I1, I2)
-    debug = 0;
     %%% feature detection
     points1 = detectSURFFeatures(I1, 'MetricThreshold', 500);
     points2 = detectSURFFeatures(I2, 'MetricThreshold', 500);
@@ -143,35 +143,8 @@ function [F, matchedPoints1, matchedPoints2, inlierIndx, status] = estimate_fund
     matchedPoints1 = vpts1(indexPairs(:,1));
     matchedPoints2 = vpts2(indexPairs(:,2));
 
-    if(debug)
-        figure; showMatchedFeatures(I1,I2,matchedPoints1,matchedPoints2);
-        legend('matched points 1','matched points 2');
-        title('all matches');
-        saveas(gcf, 'all_matches.png');
-    end
-
     %%% estimate fundamental matrix F
     [F, inlierIndx, status] = estimateFundamentalMatrix(matchedPoints1,...
         matchedPoints2,'Method','LMedS',...
         'NumTrials',10000,'DistanceThreshold',1e-4, 'ReportRuntimeError', false);
-    
-    if(debug)
-        disp(['Inlier percentage: ', num2str(sum(inlierIndx)/length(matchedPoints1))]);
-
-        epiLines = epipolarLine(F',matchedPoints2.Location(inlierIndx, :));
-        points = lineToBorderPoints(epiLines,size(I1));
-
-        figure; showMatchedFeatures(I1,I2,matchedPoints1(inlierIndx),matchedPoints2(inlierIndx));
-        legend('matched points 1','matched points 2');
-        title('inliers');
-        saveas(gcf, 'inliers_matches.png');
-
-        imshow(I1);
-        hold on;
-        plot(matchedPoints1.Location(inlierIndx,1), matchedPoints1.Location(inlierIndx, 2), 'g+');
-        hold on;
-        line(points(:,[1,3])',points(:,[2,4])');
-        title('epiloar lines');
-        saveas(gcf, 'epipolar_lines.png');
-    end
 end

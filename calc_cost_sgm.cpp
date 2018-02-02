@@ -172,7 +172,7 @@ void sgm(unsigned* bestD, unsigned* minC,
                     }
                 }
 
-                if (x == xend) {
+                if (x == xend - xstep) {
                     if (enableDiagnalPath) {
                         memcpy(ptrL4Cur, ptrCCur, sizeof(PathCost)*dMax);
                         ptrL4Cur[dMax] = 0;
@@ -212,7 +212,7 @@ void sgm(unsigned* bestD, unsigned* minC,
                             dMax, P1, adpativeP2 ? adaptive_P2(P2, pixCur, pixPre) : P2);
                     }
 
-                    if (x != xend && y != ystart) {
+                    if (x != xend - xstep && y != ystart) {
 
                         PixelType pixCur = I1[width*y + x];
                         PixelType pixPre = I1[width*(y - ystep) + x + xstep];
