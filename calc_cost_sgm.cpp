@@ -1,6 +1,9 @@
 #include "mex.h"
 #include <nmmintrin.h>
 #include "common.h"
+#define USE_VZIND 
+#define INVALID_DISPARITY (512<<SUBPIXEL_PRECISION)
+
 /*
  * calc_cost_sgm.cpp 
  * Perform cost volume construct and SGM for epipolar sgm OF method. 
@@ -11,7 +14,7 @@
  *
  * The calling syntax is:
  *
- *      [bestD, minC] = calc_cost_sgm(I1, I2, dMax, vMax, pixelPosD0, normlizeDirection, offsetFromPosD0, P1, P2)
+ *      [bestD, minC, conf] = calc_cost_sgm(I1, I2, dMax, vMax, pixelPosD0, normlizeDirection, offsetFromPosD0, P1, P2)
  *     
  * Input:
  * I1/I2 are input images
@@ -177,8 +180,6 @@ void sgm(unsigned* bestD, unsigned* minC,
                 }
 
                 if (x != xstart) {
-                    //hint map may have different size with image, must set width to mvWidth, otherwise will have 45degree error propagation issue 
-                    //when 2nd pyd processing
                     PixelType pixCur = I1[width*y + x];
                     PixelType pixPre = I1[width*y + x - xstep];
                     
@@ -355,13 +356,18 @@ void calc_cost(CostType* C,
 			double offset = offsetFromPosD0[y*width + x];
 
 			for (int d = 0; d < dMax; d++) {
+#ifdef USE_VZIND
 				double vzRatio = 1.0 * d / n * vMax;
 				double vzInd = vzRatio / (1 - vzRatio);
 
 				//offset from starting searching position
+
 				double offsetX = offset * vzInd * ux;
 				double offsetY = offset * vzInd * uy;
-
+#else
+                double offsetX = d * ux;
+                double offsetY = d * uy;
+#endif
 				int x2 = round(refPosD0X + offsetX);
 				int y2 = round(refPosD0Y + offsetY);
 
@@ -404,6 +410,131 @@ void calc_cost(CostType* C,
 	mxFree(cen2);
 	mxFree(Ctmp);
 }
+
+void convert_vzInd_to_disp(unsigned* D, int width, int height, double* offsetFromPosD0, double vMax, int n)
+{
+    for (int y = 0; y< height; y++) {
+        for(int x= 0; x < width; x++) {
+            double d = double(D[y*width + x])/(1<<SUBPIXEL_PRECISION);
+
+            double vzRatio = d / n * vMax;
+            mxAssert(vzRatio != 1 , "vZratio shoud not equal to 1" );
+            double vzInd = vzRatio/(1-vzRatio);
+            D[y*width + x] = (offsetFromPosD0[y*width + x] * vzInd) * (1<<SUBPIXEL_PRECISION);
+        }
+    }
+}
+
+
+void calc_disp_from_first(unsigned* 
+    D2, unsigned* D1, int width, int height, 
+    double* pixelPosD0, double* normlizeDirection, double* offsetFromPosD0, double vMax, int n)
+{
+    double* normlizeDirectionX = normlizeDirection;
+    double* normlizeDirectionY = normlizeDirection + width*height;
+
+    double* refPixelPosD0X = pixelPosD0;
+    double* refPixelPosD0Y = pixelPosD0 + width*height;
+
+    //initialize D2 to invalid data
+    for (int y = 0; y < height; y++)
+        for (int x = 0; x < width; x++)
+            D2[y*width + x] = INVALID_DISPARITY;
+
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+#ifdef USE_VZIND
+            double d = double(D1[y*width + x]) / (1 << SUBPIXEL_PRECISION);
+            double vzRatio = d / n * vMax;
+            mxAssert(vzRatio != 1, "vZratio shoud not equal to 1");
+            double vzInd = vzRatio / (1 - vzRatio);
+            d = offsetFromPosD0[y*width + x] * vzInd;
+#else 
+            double d = double(D1[y*width + x]) / (1 << SUBPIXEL_PRECISION);
+#endif
+            //the starting searching position in reference image
+            double refPosD0X = refPixelPosD0X[y*width + x] - 1; //due to the 1-indexing of matlab
+            double refPosD0Y = refPixelPosD0Y[y*width + x] - 1;
+            //unit direction vector
+            double ux = normlizeDirectionX[y*width + x];
+            double uy = normlizeDirectionY[y*width + x];
+
+            int p2x = refPosD0X + d * ux;
+            int p2y = refPosD0Y + d * uy;
+
+            //set four grids around (p2x, p2y) to D1, if grid is at a valid position
+            for (int dy = 0; dy <= 1; dy++) {
+                for (int dx = 0; dx <= 1; dx++) {
+                    int tx = dx + p2x;
+                    int ty = dy + p2y;
+
+                    if (tx >= 0 && tx < width && ty >= 0 && ty < height) {
+                        if (D2[ty*width + tx] == INVALID_DISPARITY || D2[ty*width + tx] < D1[y*width + x])
+                            D2[ty*width + tx] = D1[y*width + x];
+                    }
+                }
+            }
+        }
+    }
+
+}
+
+void forward_backward_check(unsigned char* conf, unsigned* D2, unsigned* D1, int width, int height,
+    double* pixelPosD0, double* normlizeDirection, double* offsetFromPosD0, double vMax, int n, int thr=2)
+{
+    memset(conf, 1, sizeof(unsigned char) * width*height);
+
+    //unsigned* D2 = (unsigned*)mxMalloc(width*height * sizeof(unsigned));
+
+    //derive D2 from D1
+    calc_disp_from_first(D2, D1, width, height, pixelPosD0, normlizeDirection, offsetFromPosD0, vMax, n);
+
+    double* refPixelPosD0X = pixelPosD0;
+    double* refPixelPosD0Y = pixelPosD0 + width*height;
+
+    double* normlizeDirectionX = normlizeDirection;
+    double* normlizeDirectionY = normlizeDirection + width*height;
+
+    //forward-backward checking
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+#ifdef USE_VZIND
+            double d = double(D1[y*width + x]) / (1 << SUBPIXEL_PRECISION);
+            double vzRatio = d / n * vMax;
+            mxAssert(vzRatio != 1, "vZratio shoud not equal to 1");
+            double vzInd = vzRatio / (1 - vzRatio);
+            d = offsetFromPosD0[y*width + x] * vzInd;
+#else 
+            double d = double(D1[y*width + x]) / (1 << SUBPIXEL_PRECISION);
+#endif
+            double refPosD0X = refPixelPosD0X[y*width + x] - 1; //due to the 1-indexing of matlab
+            double refPosD0Y = refPixelPosD0Y[y*width + x] - 1;
+            //unit direction vector
+            double ux = normlizeDirectionX[y*width + x];
+            double uy = normlizeDirectionY[y*width + x];
+
+            int p2x = round(refPosD0X + d * ux);
+            int p2y = round(refPosD0Y + d * uy);
+
+            if (p2x < 0 || p2x > width - 1 || p2y <0 || p2y > height - 1) {
+                conf[y*width + x] = 0;
+                continue;
+            }
+
+            if (D2[p2y * width + p2x] == INVALID_DISPARITY) {
+                conf[y*width + x] = 0;
+                continue;
+            }
+
+            if (std::abs(int(D1[y*width + x]) - int(D2[p2y*width + p2x])) > thr)
+                conf[y*width + x] = 0;
+
+        }
+    }
+
+    //mxFree(D2);
+}
+
 /* The gateway function */
 void mexFunction(int nlhs, mxArray *plhs[],
                  int nrhs, const mxArray *prhs[])
@@ -437,10 +568,13 @@ void mexFunction(int nlhs, mxArray *plhs[],
 
     plhs[0] = mxCreateNumericArray(2, dims, mxUINT32_CLASS, mxREAL);
     plhs[1] = mxCreateNumericArray(2, dims2, mxUINT32_CLASS, mxREAL);
+    plhs[2] = mxCreateNumericArray(2, dims2, mxUINT8_CLASS, mxREAL);
+    plhs[3] = mxCreateNumericArray(2, dims2, mxUINT32_CLASS, mxREAL);
 
-    unsigned * bestD = (unsigned*) mxGetData(plhs[0]);
+    unsigned* bestD = (unsigned*) mxGetData(plhs[0]);
     unsigned* minC = (unsigned*)mxGetData(plhs[1]);
-
+    unsigned char* conf = (unsigned char*)mxGetData(plhs[2]);
+    unsigned* bestD2 = (unsigned*)mxGetData(plhs[3]);
 	//allocate temporal buffers
 	CostType* C = (CostType*)mxMalloc(width * height * dMax* sizeof(CostType));
     //construct cost volume
@@ -450,6 +584,15 @@ void mexFunction(int nlhs, mxArray *plhs[],
     sgm(bestD, minC,
         I1, C, width, height, dMax, 
         P1,  P2, subPixelRefine);
+
+
+    //forward_backward_check(conf, bestD2, bestD, width, height,
+    //    pixelPosD0, normlizeDirection, offsetFromPosD0, vMax, dMax + 1);
+
+#ifdef USE_VZIND
+    convert_vzInd_to_disp(bestD, width, height, offsetFromPosD0, vMax,  dMax + 1);
+#endif
+ 
 
     mxFree(C);
 }
