@@ -29,10 +29,12 @@ function [F, E, H, epi, direction, Pd0, normlizeDirection, O,  Rflow, status] = 
         F = 0; E = 0; H = 0; epi = 0; direction = 0; Pd0 = 0; normlizeDirection = 0;O = 0; Rflow = 0;
         return;
     end
+    
 % fp = fopen('000000_10_fund.dat', 'rb');
 % 
 % F = fread(fp, 9, 'double');
 % F = reshape(F, [3, 3])';
+%fclose(fp);
 
 %%% compute epipole in I2 %%%
 % F'e' = 0, Fe = 0
