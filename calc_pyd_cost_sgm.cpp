@@ -13,13 +13,13 @@
  *
  * The calling syntax is:
  *
- *      [C, minIdx, minC, mvSub] = calc_cost_sgm(I1, I2, preMv, halfSearchWinSize, aggSize, subPixelRefine)
+ *      [C, minIdx, minC, mvSub] = calc_cost_sgm(I1, I2, preMv, halfSearchWinSize, aggHalfWinSize, subPixelRefine)
  *     
  * Input:
  * I1/I2 are input images
  * preMv is mv map from previous pyramidal level, must be have same or large size with I1/I2
  * halfSearchWinSize is the half search windows size in vertical direction. it is doubled in horizontal direction
- * aggSize is the aggregation window size. typically 5x5 is good
+ * aggHalfWinSize is the half aggregation window size. typically 5x5 is good
  * subPixelRefine: enable sub-pixel position calculation. if set mvSub contains the subpixel location of current level.  
  *
  * Output:
@@ -29,6 +29,7 @@
  * mvSub: subpixel localtion
 */
 
+#define USE_CONST_COST 
 //perform a single step to calculate path cost for current pixel position
 inline void sgm_step(PathCost* L, //current path cost
     PathCost* Lpre, //previous path cost
@@ -113,7 +114,7 @@ inline int adaptive_P2(int P2, int pixCur, int pixPre) {
 void sgm2d(unsigned* bestD, unsigned* minC, double* mvSub, 
         PixelType* I1, CostType* C, int width, int height, int dMax,
         double* mvPre, int mvWidth, int mvHeight, 
-        int searchWinX, int searchWinY, int P1, int P2, int subpixelRefine )
+        int searchWinX, int searchWinY, int P1, int P2, int subpixelRefine, bool  enableDiagnalPath = true, int totalPass = 2, bool adpativeP2 = false)
 {
     mxAssert(dMax == searchWinX*searchWinY, "dMax should equal to searchWinX*searchWinY");
     //allocate path cost buffers. dMax cost entries + 1 minimun cost entry
@@ -130,10 +131,6 @@ void sgm2d(unsigned* bestD, unsigned* minC, double* mvSub,
     const int pathCostEntryPerRow = width * pathCostEntryPerPixel;
     const int costPerRowEntry = width*dMax;
     
-    const bool adpativeP2 = false;
-    const int totalPass = 2;
-    const bool enableDiagnalPath = false;
-
     int ystart = 0;
     int yend = height ;
     int ystep = 1;
@@ -186,7 +183,7 @@ void sgm2d(unsigned* bestD, unsigned* minC, double* mvSub,
 
                     if (enableDiagnalPath) {
                         memcpy(ptrL2Cur, ptrCCur, sizeof(PathCost)*dMax);
-                        ptrL2Cur[dMax] = MAX_PATH_COST;
+                        ptrL2Cur[dMax] = 0;
                     }
                 }
 
@@ -203,7 +200,7 @@ void sgm2d(unsigned* bestD, unsigned* minC, double* mvSub,
                     }
                 }
 
-                if (x == xend) {
+                if (x == xend - xstep) {
                     if (enableDiagnalPath) {
                         memcpy(ptrL4Cur, ptrCCur, sizeof(PathCost)*dMax);
                         ptrL4Cur[dMax] = 0;
@@ -252,7 +249,7 @@ void sgm2d(unsigned* bestD, unsigned* minC, double* mvSub,
                             dx, dy, searchWinX, searchWinY, P1, adpativeP2 ? adaptive_P2(P2, pixCur, pixPre) : P2);
                     }
 
-                    if (x != xend && y != ystart) {
+                    if (x != xend - xstep && y != ystart) {
                         double dx = pMvx[y*mvWidth + x] - pMvx[(y - ystep)*mvWidth + x + xstep];
                         double dy = pMvy[y*mvWidth + x] - pMvy[(y - ystep)*mvWidth + x + xstep];
 
@@ -399,35 +396,34 @@ void calc_cost(unsigned char* C,
                     //mexPrintf("d: %d\n", d);
                   
                     unsigned costSum = 0;
-                   
                     for (int aggy = -winRadiusAgg; aggy <= winRadiusAgg; aggy++) {
                         for (int aggx = -winRadiusAgg; aggx <= winRadiusAgg; aggx++) {
 
                             int y1 = y + aggy;
                             int x1 = x + aggx;
-
+#ifdef USE_CONST_COST
                             if(y1 < 0 || y1 > height-1 || x1 <0 || x1 > width-1) {
                                 costSum += defaultCost;  //add constant cost if not valid current pixel position
                                 continue;
                             }
-                            
-                            //y1 = y1 < 0 ? 0 : (y1 > height - 1 ? height - 1 : y1);
-                            //x1 = x1 < 0 ? 0 : (x1 > width - 1 ? width - 1 : x1);
-
+#else         
+                            y1 = clamp(y1, 0, height - 1);
+                            x1 = clamp(x1, 0, width - 1);
+#endif
                             unsigned cenCode1 = cen1[width*y1 + x1];
 
                             int y2 = 1.0*(offy + y1) + mvy + 0.5;
                             int x2 = 1.0*(offx + x1) + mvx + 0.5;
-                            
+#ifdef USE_CONST_COST                  
                             if(y2 < 0 || y2 > height-1 || x2 <0 || x2 > width-1) {
                                 costSum += defaultCost; //add constant cost if not valid reference pixel position
                                 continue;
                             }
-                            //y2 = y2 < 0 ? 0 : (y2 > height - 1 ? height - 1 : y2);
-                            //x2 = x2 < 0 ? 0 : (x2 > width - 1 ? width - 1 : x2);
-
+#else
+                            y2 = clamp(y2, 0, height - 1);
+                            x2 = clamp(x2, 0, width - 1);
+#endif
                             unsigned cenCode2 = cen2[width*y2 + x2];
-
                             int censusCost = _mm_popcnt_u32((cenCode1^cenCode2));
                             costSum += censusCost;
                         }
@@ -443,42 +439,45 @@ void calc_cost(unsigned char* C,
 void mexFunction(int nlhs, mxArray *plhs[],
                  int nrhs, const mxArray *prhs[])
 {
-    PixelType *I1;             /* pointer to Input image I1 */
-    PixelType *I2;             /* pointer to Input image I2 */
-    double *preMv;          /* pointer to initial search position */
+    PixelType *I1;                  /* pointer to Input image I1 */
+    PixelType *I2;                  /* pointer to Input image I2 */
+    double *preMv;                  /* pointer to initial search position */
     
-    mwSize width;               /* rows (width) assume I1/I2 are permuted before passing in */
-    mwSize height;               /* cols (height)*/
+    mwSize width;                   /* rows (width) assume I1/I2 are permuted before passing in */
+    mwSize height;                  /* cols (height)*/
     
     I1 = (PixelType*)mxGetData(prhs[0]);
     I2 = (PixelType*)mxGetData(prhs[1]);
     
-    
-    preMv = mxGetPr(prhs[2]);
+    preMv = mxGetPr(prhs[2]);       /* previous level's mv result, already upscaled to current level's size*/
     
     width = mxGetM(prhs[0]);
     height = mxGetN(prhs[0]);
     
-    double halfSearchWinSize = mxGetScalar(prhs[3]);
-    double aggSize= mxGetScalar(prhs[4]);
-    int dMax = (4*halfSearchWinSize+1)*(2*halfSearchWinSize+1);
-    int subPixelRefine = mxGetScalar(prhs[5]);
-    int P1 = mxGetScalar(prhs[6]);
-    int P2 = mxGetScalar(prhs[7]);
+    double halfSearchWinSizeX = mxGetScalar(prhs[3]);
+    double halfSearchWinSizeY = mxGetScalar(prhs[4]);
+    double aggHalfWinSize= mxGetScalar(prhs[5]);
+    int dMax = (2 * halfSearchWinSizeX + 1)*(2 * halfSearchWinSizeY + 1);
+    int subPixelRefine = mxGetScalar(prhs[6]);
+    int P1 = mxGetScalar(prhs[7]);
+    int P2 = mxGetScalar(prhs[8]);
+    bool enableDiagnalPath = mxGetScalar(prhs[9]);
+    int totalPass = mxGetScalar(prhs[10]);
+    bool adpativeP2 = mxGetScalar(prhs[11]);
     
     /* create the output matrix */
-    const mwSize dims[]={width, height, dMax};      //output: costvolume
+    //const mwSize dims[]={width, height, dMax};      //output: costvolume
     const mwSize dims2[] = { width, height };       //output: best index map
     const mwSize dims3[] = { width, height, 2 };    //output: subpixel position
 
-    plhs[0] = mxCreateNumericArray(3, dims, mxUINT8_CLASS, mxREAL);
+    //plhs[0] = mxCreateNumericArray(3, dims, mxUINT8_CLASS, mxREAL);
+    plhs[0] = mxCreateNumericArray(2, dims2, mxUINT32_CLASS, mxREAL);
     plhs[1] = mxCreateNumericArray(2, dims2, mxUINT32_CLASS, mxREAL);
-    plhs[2] = mxCreateNumericArray(2, dims2, mxUINT32_CLASS, mxREAL);
-    plhs[3] = mxCreateNumericArray(3, dims3, mxDOUBLE_CLASS, mxREAL);
-    CostType* C = (CostType*) mxGetData(plhs[0]);
-    unsigned * bestD = (unsigned*) mxGetData(plhs[1]);
-    unsigned* minC = (unsigned*)mxGetData(plhs[2]);
-    double* mvSub = mxGetPr(plhs[3]);
+    plhs[2] = mxCreateNumericArray(3, dims3, mxDOUBLE_CLASS, mxREAL);
+    
+    unsigned * bestD = (unsigned*) mxGetData(plhs[0]);
+    unsigned* minC = (unsigned*)mxGetData(plhs[1]);
+    double* mvSub = mxGetPr(plhs[2]);
 
     unsigned* cen1 = (unsigned*)mxMalloc(width * height * sizeof(unsigned));
     unsigned *cen2 = (unsigned*)mxMalloc(width * height * sizeof(unsigned));
@@ -486,15 +485,15 @@ void mexFunction(int nlhs, mxArray *plhs[],
     census(I1, cen1, width, height, 2);
     census(I2, cen2, width, height, 2);
     
-    int winRadiusY = halfSearchWinSize;
-    int winRadiusX = 2*halfSearchWinSize;
-    int winRadiusAgg = (int)aggSize/2;
+    int winRadiusY = halfSearchWinSizeY;
+    int winRadiusX = halfSearchWinSizeX;
+    int winRadiusAgg = aggHalfWinSize;
     mexPrintf("width: %d, height: %d, dMax: %d, winRadiusAgg: %d\n", width, height, dMax, winRadiusAgg);
     
     int mvWidth = mxGetM(prhs[2]);
     int mvHeight = mxGetN(prhs[2])/2;
     
-    
+    CostType* C = (CostType*)mxMalloc(width*height*dMax * sizeof(CostType));
     //construct cost volume
     calc_cost(C, cen1, cen2, width, height, preMv, mvWidth, mvHeight,
         winRadiusAgg, winRadiusX, winRadiusY);
@@ -503,9 +502,9 @@ void mexFunction(int nlhs, mxArray *plhs[],
     sgm2d(bestD, minC, mvSub, 
         I1, C, width, height, dMax, 
         preMv, mvWidth, mvHeight, 
-        winRadiusX*2 +1, winRadiusY*2+1, P1,  P2, subPixelRefine);
+        winRadiusX*2 +1, winRadiusY*2+1, P1,  P2, subPixelRefine, enableDiagnalPath, totalPass, adpativeP2);
     
     mxFree(cen1);
     mxFree(cen2);
-    
+    mxFree(C);
 }

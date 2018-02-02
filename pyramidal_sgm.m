@@ -14,8 +14,12 @@ function [ mvCurLevel, mvPyd , minC] = pyramidal_sgm( I0, I1, numPyd )
     
     P1 = 6;
     P2 = 32;
-    aggSize = 5;
-    verSearchHalfWinSize = 4;
+    aggHalfWinSize = 2;                %half aggregation window size
+    verSearchHalfWinSize = 5;   %half search window size in vertical direction
+    horSearchHalfWinSize = 5;   %half search window size in vertical direction
+    enableDiagonal = 1;
+    totalPass = 2;
+    adaptiveP2 = 0;
     
     I0pyd{1} = I0;
     I1pyd{1} = I1;
@@ -26,8 +30,9 @@ function [ mvCurLevel, mvPyd , minC] = pyramidal_sgm( I0, I1, numPyd )
         I1pyd{l} = impyramid(I1pyd{l-1}, 'reduce');
     end
   
+    %initialize previous level's mv result as zero
     mvPreLevel = zeros(size(I0pyd{numPyd}, 1), size(I0pyd{numPyd}, 2), 2);
-
+    
     % loop pyramidal levels
     for l = numPyd:-1:1
         rowl = size(I0pyd{l}, 1);
@@ -35,38 +40,33 @@ function [ mvCurLevel, mvPyd , minC] = pyramidal_sgm( I0, I1, numPyd )
         mvCurLevel = zeros(rowl, coll, 2);
         
         tic;
+        % permute the matrix for row-major processing order in c code. 
         I1gray = rgb2gray(permute(I0pyd{l}, [2, 1, 3]));
         I2gray = rgb2gray(permute(I1pyd{l}, [2, 1, 3]));
         mvPrePermuted = permute(mvPreLevel, [2, 1, 3]);
-        %construct cost volume and SGM
         
-%         if(l==numPyd)
-            [~, minIdx, minC, mvSub] = calc_pyd_cost_sgm(I1gray, I2gray, mvPrePermuted, verSearchHalfWinSize, aggSize, l==1, P1, P2);
-            minIdx = minIdx' + 1; 
-%         else
-%             [minC, mvSub] = calc_pyd_cost_sgm_ng(I1gray, I2gray, mvPrePermuted, 1, 2, 0, P1, P2);
-%         end
+        %construct cost volume and SGM
+        subpixelRefine = l == 1;
+        [minIdx, minC, mvSub] = calc_pyd_cost_sgm(I1gray, I2gray, mvPrePermuted, horSearchHalfWinSize, verSearchHalfWinSize, aggHalfWinSize, subpixelRefine, ...
+                P1, P2, enableDiagonal, totalPass, adaptiveP2);
+        minIdx = minIdx' + 1; 
         mvSub = permute(mvSub, [2, 1, 3]);
         toc;
         
-%         if(l == numPyd) 
         % recover mv from idx
-            [r, c] = ind2sub([2*verSearchHalfWinSize+1, 4*verSearchHalfWinSize + 1], minIdx(:));
+        [r, c] = ind2sub([2*verSearchHalfWinSize+1, 2*horSearchHalfWinSize + 1], minIdx(:));
 
-            mvx = c - 2*verSearchHalfWinSize - 1;
-            mvy = r - verSearchHalfWinSize - 1;
+        mvx = c - horSearchHalfWinSize - 1;
+        mvy = r - verSearchHalfWinSize - 1;
 
-            mvCurLevel(:,:,1) = reshape(mvx, [rowl, coll]);       
-            mvCurLevel(:,:,2) = reshape(mvy, [rowl, coll]);
-            mvCurLevel = mvCurLevel + mvPreLevel(1:rowl, 1:coll, :) + mvSub;
-%         else
-%             mvCurLevel = mvSub;
-%         end
+        mvCurLevel(:,:,1) = reshape(mvx, [rowl, coll]);       
+        mvCurLevel(:,:,2) = reshape(mvy, [rowl, coll]);
+        mvCurLevel = mvCurLevel + mvPreLevel(1:rowl, 1:coll, :) + mvSub;
+
         mvPyd{l} = mvCurLevel;
         if (l > 1)
             %pass to next level, need to upscale mv map size and also the
-            %mv magnitude. 
-                    
+            %mv magnitude.               
 %             mvCurLevel(:,:,1) = medfilt2(mvCurLevel(:,:,1));
 %             mvCurLevel(:,:,2) = medfilt2(mvCurLevel(:,:,2));
             mvPreLevel = 2*imresize(mvCurLevel, 2, 'nearest');
