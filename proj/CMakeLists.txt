@@ -8,6 +8,7 @@ else ()
 endif()
 
 include_directories( ${CMAKE_CURRENT_LIST_DIR}/include )
+include_directories( ${CMAKE_CURRENT_LIST_DIR}/external )
 aux_source_directory(${CMAKE_CURRENT_LIST_DIR}/src SGMOF_SRC)
 project( SGMOF )
 find_package( OpenCV REQUIRED )
