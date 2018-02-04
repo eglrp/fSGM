@@ -1,5 +1,12 @@
 cmake_minimum_required(VERSION 2.8)
-LIST(APPEND CMAKE_PREFIX_PATH "C:/opencv/opencv-3.2.0/build")
+if (WIN32)
+    LIST(APPEND CMAKE_PREFIX_PATH "C:/Users/megamusz/Downloads/opencv-3.2.0-vc14/opencv/build/install/")
+else ()
+    LIST(APPEND CMAKE_PREFIX_PATH "/home/utils/opencv-3.3.0/share/OpenCV")
+    add_definitions(-DCUDA_TOOLKIT_ROOT_DIR=/home/utils/cuda_7.5.18)
+    add_definitions(-DCMAKE_CXX_COMPILER=/home/utils/gcc-4.8.4/bin/g++)
+endif()
+
 include_directories( ${CMAKE_CURRENT_LIST_DIR}/include )
 aux_source_directory(${CMAKE_CURRENT_LIST_DIR}/src SGMOF_SRC)
 project( SGMOF )
